@@ -281,6 +281,7 @@ window.WB={CLIENT_ID:'__CLIENT_ID__',TENANT_NAME:'__TENANT_NAME__',SUPABASE_URL:
  </div>
 </section>
 
+<section class="view" id="guides"><div id="guidesBody"></div></section>
 </main>
 <div id="sdsOverlay"></div>
 <script>
@@ -554,7 +555,7 @@ function go(id){
  window.scrollTo(0,0);
 }
 /* charts (dependency-free SVG/CSS) */
-function donut(segs,size){size=size||150;const r=size/2-13,cx=size/2,cy=size/2,C=2*Math.PI*r;const tot=segs.reduce((a,s)=>a+s.value,0)||1;let off=0;const rings=segs.filter(s=>s.value>0).map(s=>{const len=s.value/tot*C;const el='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+s.color+'" stroke-width="22" stroke-dasharray="'+len+' '+(C-len)+'" stroke-dashoffset="'+(-off)+'" transform="rotate(-90 '+cx+' '+cy+')"/>';off+=len;return el;}).join('');return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" style="display:block;margin:0 auto">'+rings+'<text x="'+cx+'" y="'+(cy-2)+'" text-anchor="middle" font-size="28" font-weight="800" fill="#231F20">'+tot+'</text><text x="'+cx+'" y="'+(cy+16)+'" text-anchor="middle" font-size="10" fill="#6b7280" font-weight="700">ASSESSED</text></svg>';}
+function donut(segs,size){size=size||150;const r=size/2-13,cx=size/2,cy=size/2,C=2*Math.PI*r;const real=segs.reduce((a,s)=>a+s.value,0);const tot=real||1;let off=0;const rings=segs.filter(s=>s.value>0).map(s=>{const len=s.value/tot*C;const el='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+s.color+'" stroke-width="22" stroke-dasharray="'+len+' '+(C-len)+'" stroke-dashoffset="'+(-off)+'" transform="rotate(-90 '+cx+' '+cy+')"/>';off+=len;return el;}).join('');return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" style="display:block;margin:0 auto">'+rings+'<text x="'+cx+'" y="'+(cy-2)+'" text-anchor="middle" font-size="28" font-weight="800" fill="#231F20">'+real+'</text><text x="'+cx+'" y="'+(cy+16)+'" text-anchor="middle" font-size="10" fill="#6b7280" font-weight="700">ASSESSED</text></svg>';}
 function trend(vals){const w=300,h=120,pad=18,bw=w/vals.length*0.6,gap=w/vals.length;const mx=Math.max.apply(null,vals)||1;const bars=vals.map((v,i)=>{const bh=(v/mx)*(h-pad*2);const x=i*gap+(gap-bw)/2;const y=h-pad-bh;return '<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="3" fill="var(--teal)"/><text x="'+(x+bw/2)+'" y="'+(h-5)+'" text-anchor="middle" font-size="9" fill="#6b7280">'+['Jan','Feb','Mar','Apr','May','Jun'][i]+'</text>';}).join('');return '<svg width="100%" viewBox="0 0 '+w+' '+h+'">'+bars+'</svg>';}
 
 /* ============================== DASHBOARD ============================== */
@@ -583,7 +584,7 @@ function renderDashboard(){
  document.getElementById('chartHealth').innerHTML=
   hb('SDS coverage',n?Math.round(sds/n*100):0,'var(--teal)')+
   hb('Reviewed / scheduled within 12 months',n?Math.round(ws.filter(w=>w.nextReview).length/n*100):0,'var(--navy)')+
-  hb('Borderline cases routed to expert',100,'var(--green)')+
+  hb('Borderline cases routed to expert',bor?100:0,'var(--green)')+
   hb('Insurance coverage',n?Math.round(cov/n*100):0,'var(--teal)');
  const bq=ws.filter(w=>w.outcome==='border');
  document.getElementById('dashBorder').innerHTML='<table><thead><tr><th>Ref</th><th>Role</th><th>Engagement</th><th>Day rate</th><th>Provisional</th><th class="small">Action</th></tr></thead><tbody>'+bq.map(w=>'<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>£'+w.rate+'</td><td>'+pill('Borderline')+'</td><td><a href="#" style="color:var(--teal);font-weight:600" onclick="go(\'review\');return false;">Open review →</a></td></tr>').join('')+'</tbody></table>';
@@ -754,14 +755,14 @@ function closeSDS(){const ov=document.getElementById('sdsOverlay');ov.classList.
 
 /* ============================== AUTH / RBAC + TWO-STAGE REVIEW (demonstration access) ============================== */
 const ROLE_TABS={
- platform:['dash','assess','jd','library','register','review','reviews','audit'],
- clientadmin:['dash','assess','jd','library','register','review','reviews','audit'],
- linemanager:['dash','assess','jd','library','register','reviews','audit'],
- internalreviewer:['review','register','audit'],
- reviewer:['review','audit'],
- contractor:['mine','assess']
+ platform:['dash','assess','jd','library','register','review','reviews','audit','guides'],
+ clientadmin:['dash','assess','jd','library','register','review','reviews','audit','guides'],
+ linemanager:['dash','assess','jd','library','register','reviews','audit','guides'],
+ internalreviewer:['review','register','audit','guides'],
+ reviewer:['review','audit','guides'],
+ contractor:['mine','assess','guides']
 };
-const NAVLABEL={dash:'Reporting Dashboard',assess:'New Assessment',jd:'JD Analyser',library:'Role Library',register:'Worker Register',review:'Review Queue',reviews:'SDS Reviews',audit:'Audit & Disputes',mine:'My IR35 status'};
+const NAVLABEL={dash:'Reporting Dashboard',assess:'New Assessment',jd:'JD Analyser',library:'Role Library',register:'Worker Register',review:'Review Queue',reviews:'SDS Reviews',audit:'Audit & Disputes',mine:'My IR35 status',guides:'Guides'};
 const USERS={
  platform:{role:'platform',name:'Aaron George',title:'Ascend Platform Admin',tenant:'All tenants'},
  clientadmin:{role:'clientadmin',name:'Orsted IR35 Administrator',title:'Client Administrator',tenant:'Orsted'},
@@ -839,9 +840,10 @@ function go(id){
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.v===id));
  if(id==='assess'){wireAssess();var _lock=CURRENT_USER.role==='contractor'?'contractor':(CURRENT_USER.role==='linemanager'?'client':null);applyRespLock(_lock);if(CURRENT_USER.role==='contractor'){const aw=document.getElementById('aWorker');if(aw){aw.value=CURRENT_USER.name;aw.readOnly=true;}const w=DB.worker(CURRENT_USER.workerRef);const ar=document.getElementById('aRole');if(ar&&w){ar.value=w.role;ar.readOnly=true;}}}
  else if(id==='register'){renderRegister();if(CURRENT_USER.role==='linemanager')injectLMFilter();}
- else {({dash:renderDashboard,jd:initJD,library:renderLibrary,review:renderReview,reviews:renderReviews,audit:renderAudit,mine:renderMine}[id]||function(){})();}
+ else {({dash:renderDashboard,jd:initJD,library:renderLibrary,review:renderReview,reviews:renderReviews,audit:renderAudit,mine:renderMine,guides:renderGuides}[id]||function(){})();}
  window.scrollTo(0,0);
 }
+function renderGuides(){var contractor=CURRENT_USER&&CURRENT_USER.role==='contractor';var G=[];if(!contractor){G.push({t:'Hirer guide',d:'For contract managers and line managers \u2014 signing in, the tabs, assessing roles and workers, issuing an SDS, and reasonable care.',f:'guides/Ascend_IR35_Workbench_Hirer_Guide.pdf'});}G.push({t:'Contractor guide',d:'For contractors completing their own questionnaire \u2014 what to have ready, how to answer, and what happens next.',f:'guides/Ascend_IR35_Workbench_Contractor_Guide.pdf'});var h='<h2>Guides</h2><p class="lead">Short PDF guides to using the IR35 Workbench. They open in a new tab.</p><div class="grid2">';h+=G.map(function(g){return '<div class="card"><h3><span class="dot"></span>'+g.t+'</h3><p class="small">'+g.d+'</p><div style="margin-top:10px"><a class="btn" href="'+g.f+'" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">Open guide (PDF) &rarr;</a></div></div>';}).join('');h+='</div>';document.getElementById('guidesBody').innerHTML=h;}
 function injectLMFilter(){const tb=document.querySelector('#register .toolbar');if(!tb||document.getElementById('lmMine'))return;const lbl=document.createElement('label');lbl.style.cssText='display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--navy)';lbl.innerHTML='<input type="checkbox" id="lmMine" onchange="renderRegister()"> My workers only';tb.insertBefore(lbl,document.getElementById('regCount'));}
 function renderMine(){
  const u=CURRENT_USER,w=DB.worker(u.workerRef),sds=DB.sdsFor(u.workerRef),rev=DB.reviewFor(u.workerRef);
