@@ -821,7 +821,7 @@ function buildLoginUI(){
  migrateReviews();
 }
 function loginAs(key){CURRENT_USER=Object.assign({},USERS[key]);var _n=document.getElementById('loginName');if(_n&&_n.value.trim())CURRENT_USER.name=_n.value.trim();document.getElementById('loginScreen').style.display='none';renderNav();go(defaultTab(CURRENT_USER.role));}
-function logout(){try{if(window.__sb)window.__sb.auth.signOut();}catch(e){}CURRENT_USER=null;location.reload();}
+function logout(){CURRENT_USER=null;const ls=document.getElementById('loginScreen');if(ls)ls.style.display='flex';}
 function updateHeader(){if(!CURRENT_USER)return;const r=document.querySelector('header .right');if(!r)return;r.innerHTML='<b>'+esc(CURRENT_USER.title)+' — '+esc(CURRENT_USER.name)+'</b><span>Tenant: '+esc(CURRENT_USER.tenant)+' · ruleset '+RULESET_VERSION+'</span><button class="logout" onclick="logout()">Log out</button>';}
 
 function renderNav(){
@@ -920,11 +920,11 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
  async function hydrateAndStart(){
   var tries=0;while(!(window.supabase&&window.supabase.createClient)&&tries<60){await new Promise(function(r){setTimeout(r,100);});tries++;}
   if(!(window.supabase&&window.supabase.createClient)){fatal('Could not load the secure-store library. Check your internet connection and reload the page.');return;}
-  try{if(!window.__sb)window.__sb=window.supabase.createClient(WB.SUPABASE_URL,WB.SUPABASE_ANON_KEY);}catch(e){fatal('Store configuration error. Please contact Aaron.');return;}
-  try{await DB.loadAsync();}catch(e){console.error('WB load failed',e);fatal('You are signed in, but the '+esc(TENANT.name)+' secure store (London) refused the request. If you have only just been added, your access may not be active yet — contact Aaron. Otherwise check your connection and reload.');return;}
+  try{window.__sb=window.supabase.createClient(WB.SUPABASE_URL,WB.SUPABASE_ANON_KEY);}catch(e){fatal('Store configuration error. Please contact Aaron.');return;}
+  try{await DB.loadAsync();}catch(e){console.error('WB load failed',e);fatal('Could not reach the '+esc(TENANT.name)+' secure store (London). Check your connection and reload the page.');return;}
   saveFlagInit();
   var b=document.getElementById('wbBanner');if(b)b.textContent=TENANT.name+' — client-confidential. Off-payroll status determinations. Decision-support, not legal advice.';
-  buildLoginUI();var _ls=document.getElementById('loginScreen');if(_ls)_ls.style.display='none';enterAsAuthedUser();
+  buildLoginUI();
  }
  function gate(){
   var ov=el('div','position:fixed;inset:0;z-index:450;background:linear-gradient(135deg,#0C365F,#001E5A);display:flex;align-items:center;justify-content:center;padding:24px;font-family:Mulish,sans-serif');
@@ -934,117 +934,7 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
   function submit(){if((inp.value||'')===WB.ACCESS_CODE){ov.remove();hydrateAndStart();}else{err.textContent='Incorrect code.';inp.value='';inp.focus();}}
   btn.onclick=submit;inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();submit();}});setTimeout(function(){inp.focus();},80);
  }
- /* ---- Per-user authentication (Supabase Auth: email + password + TOTP MFA) ---- */
- var ROLE_MAP={platform:'platform',clientadmin:'clientadmin',linemanager:'linemanager',internalreviewer:'internalreviewer',reviewer:'reviewer',contractor:'contractor'};
- async function enterAsAuthedUser(){
-  var user=null;try{var r=await window.__sb.auth.getUser();user=r&&r.data?r.data.user:null;}catch(e){}
-  if(!user){fatal('Your session could not be read. Please reload and sign in again.');return;}
-  var meta=user.app_metadata||{};var roleKey=ROLE_MAP[meta.role]||null;
-  if(!roleKey||!USERS[roleKey]){fatal('You are signed in, but your account has no Workbench role assigned yet. Contact Aaron to be authorised.');return;}
-  CURRENT_USER=Object.assign({},USERS[roleKey]);
-  CURRENT_USER.name=(user.user_metadata&&user.user_metadata.full_name)||meta.full_name||user.email;
-  CURRENT_USER.email=user.email;
-  if(roleKey!=='platform'&&meta.tenant)CURRENT_USER.tenant=TENANT.name;
-  if(roleKey==='contractor'&&meta.worker_ref)CURRENT_USER.workerRef=meta.worker_ref;
-  var ls=document.getElementById('loginScreen');if(ls)ls.style.display='none';
-  renderNav();go(defaultTab(CURRENT_USER.role));
- }
- function abody(){return document.getElementById('wbAuthBody');}
- function aerr(m){var e=document.getElementById('wbAuthErr');if(e)e.textContent=m||'';}
- function afield(id,type,ph){return '<input id="'+id+'" type="'+type+'" placeholder="'+ph+'" autocomplete="'+(type==='password'?'current-password':(type==='email'?'username':'off'))+'" style="width:100%;padding:11px 12px;border:1px solid #DBDBDB;border-radius:9px;font-size:14px;font-family:inherit;margin-bottom:8px">';}
- function abtn(id,label){return '<button id="'+id+'" style="width:100%;margin-top:4px;padding:11px;border:0;border-radius:9px;background:#218380;color:#fff;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit">'+label+'</button>';}
- function aerrline(){return '<div id="wbAuthErr" style="color:#9C2373;font-size:12px;font-weight:700;margin-top:8px;min-height:15px"></div>';}
- function authScreen(){
-  var ov=el('div','position:fixed;inset:0;z-index:450;background:linear-gradient(135deg,#0C365F,#001E5A);display:flex;align-items:center;justify-content:center;padding:24px;font-family:Mulish,sans-serif');ov.id='wbAuth';
-  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:400px;width:100%;padding:30px;box-shadow:0 30px 80px rgba(0,0,0,.4)"><img src="Ascend_Logo_Colour.svg" alt="Ascend" style="height:28px;margin-bottom:12px"><h2 style="font-size:18px;margin-bottom:4px">IR35 Workbench — '+esc(TENANT.name)+'</h2><div style="color:#6b7280;font-size:13px;margin-bottom:16px">Client-confidential. Sign in with your account.</div><div id="wbAuthBody"></div></div>';
-  document.body.appendChild(ov);showPassword();
- }
- function showPassword(){
-  abody().innerHTML=afield('wbEmail','email','Email')+afield('wbPass','password','Password')+aerrline()+abtn('wbSignIn','Sign in');
-  document.getElementById('wbSignIn').onclick=doPassword;
-  document.getElementById('wbPass').addEventListener('keydown',function(e){if(e.key==='Enter')doPassword();});
-  setTimeout(function(){var x=document.getElementById('wbEmail');if(x)x.focus();},80);
- }
- async function doPassword(){
-  aerr('');var email=(document.getElementById('wbEmail').value||'').trim();var pass=document.getElementById('wbPass').value||'';
-  if(!email||!pass){aerr('Enter your email and password.');return;}
-  var b=document.getElementById('wbSignIn');b.disabled=true;b.textContent='Signing in…';
-  var r=await window.__sb.auth.signInWithPassword({email:email,password:pass});
-  b.disabled=false;b.textContent='Sign in';
-  if(r.error){aerr(r.error.message||'Sign-in failed.');return;}
-  await afterPassword();
- }
- async function afterPassword(){
-  var aal=await window.__sb.auth.mfa.getAuthenticatorAssuranceLevel();
-  var cur=aal&&aal.data?aal.data.currentLevel:null,nxt=aal&&aal.data?aal.data.nextLevel:null;
-  if(cur==='aal2'){finishAuth();return;}
-  if(nxt==='aal2'){
-   var f=await window.__sb.auth.mfa.listFactors();
-   var totp=f&&f.data&&f.data.totp&&f.data.totp.length?f.data.totp[0]:null;
-   if(totp){showChallenge(totp.id);}else{showEnroll();}
-  }else{showEnroll();}
- }
- function finishAuth(){var ov=document.getElementById('wbAuth');if(ov)ov.remove();hydrateAndStart();}
- async function showEnroll(){
-  abody().innerHTML='<div style="font-size:13px;color:#333;margin-bottom:10px">Set up two-factor authentication. Scan this with an authenticator app (Microsoft/Google Authenticator, 1Password…), then enter the 6-digit code.</div><div id="wbQR" style="text-align:center;margin-bottom:10px;min-height:180px"></div>'+afield('wbCode','text','6-digit code')+aerrline()+abtn('wbVerify','Verify & continue');
-  var en=await window.__sb.auth.mfa.enroll({factorType:'totp'});
-  if(en.error){aerr(en.error.message||'Could not start MFA setup.');return;}
-  var fid=en.data.id;var qr=en.data.totp&&en.data.totp.qr_code;
-  if(qr){document.getElementById('wbQR').innerHTML='<img alt="QR" style="width:180px;height:180px" src="'+qr+'">';}
-  document.getElementById('wbVerify').onclick=function(){verifyFactor(fid);};
-  document.getElementById('wbCode').addEventListener('keydown',function(e){if(e.key==='Enter')verifyFactor(fid);});
- }
- async function showChallenge(fid){
-  abody().innerHTML='<div style="font-size:13px;color:#333;margin-bottom:10px">Enter the 6-digit code from your authenticator app.</div>'+afield('wbCode','text','6-digit code')+aerrline()+abtn('wbVerify','Verify & continue');
-  document.getElementById('wbVerify').onclick=function(){verifyFactor(fid);};
-  document.getElementById('wbCode').addEventListener('keydown',function(e){if(e.key==='Enter')verifyFactor(fid);});
-  setTimeout(function(){var x=document.getElementById('wbCode');if(x)x.focus();},80);
- }
- async function verifyFactor(fid){
-  aerr('');var code=(document.getElementById('wbCode').value||'').trim();if(!/^[0-9]{6}$/.test(code)){aerr('Enter the 6-digit code.');return;}
-  var v=document.getElementById('wbVerify');v.disabled=true;v.textContent='Verifying…';
-  var ch=await window.__sb.auth.mfa.challenge({factorId:fid});
-  if(ch.error){v.disabled=false;v.textContent='Verify & continue';aerr(ch.error.message);return;}
-  var res=await window.__sb.auth.mfa.verify({factorId:fid,challengeId:ch.data.id,code:code});
-  v.disabled=false;v.textContent='Verify & continue';
-  if(res.error){aerr(res.error.message||'Incorrect code.');return;}
-  finishAuth();
- }
- /* First-time onboarding (invite / password reset): set a password, then MFA. */
- function showSetPassword(){
-  abody().innerHTML='<div style="font-size:13px;color:#333;margin-bottom:10px">Welcome. Set a password for your Workbench account to continue.</div>'+afield('wbNewPass','password','New password (min 8 characters)')+afield('wbNewPass2','password','Confirm password')+aerrline()+abtn('wbSetPw','Set password & continue');
-  document.getElementById('wbSetPw').onclick=doSetPassword;
-  document.getElementById('wbNewPass2').addEventListener('keydown',function(e){if(e.key==='Enter')doSetPassword();});
-  setTimeout(function(){var x=document.getElementById('wbNewPass');if(x)x.focus();},80);
- }
- async function doSetPassword(){
-  aerr('');var p1=document.getElementById('wbNewPass').value||'';var p2=document.getElementById('wbNewPass2').value||'';
-  if(p1.length<8){aerr('Password must be at least 8 characters.');return;}
-  if(p1!==p2){aerr('Passwords do not match.');return;}
-  var b=document.getElementById('wbSetPw');b.disabled=true;b.textContent='Saving…';
-  var r=await window.__sb.auth.updateUser({password:p1});
-  b.disabled=false;b.textContent='Set password & continue';
-  if(r.error){aerr(r.error.message||'Could not set password.');return;}
-  await afterPassword();
- }
- /* entry: handle invite/reset, else resume an aal2 session, else show sign-in */
- var INVITE_FLOW = /type=(invite|recovery)/.test((window.location.hash||'')+(window.location.search||''));
- (function boot(){
-  var tries=0;(function wait(){
-   if(window.supabase&&window.supabase.createClient){
-    try{if(!window.__sb)window.__sb=window.supabase.createClient(WB.SUPABASE_URL,WB.SUPABASE_ANON_KEY);}catch(e){fatal('Store configuration error. Please contact Aaron.');return;}
-    (async function(){
-     try{var s=await window.__sb.auth.getSession();var sess=s&&s.data?s.data.session:null;
-      if(INVITE_FLOW&&sess){authScreen();showSetPassword();return;}
-      if(sess){var aal=await window.__sb.auth.mfa.getAuthenticatorAssuranceLevel();
-       if(aal&&aal.data&&aal.data.currentLevel==='aal2'){hydrateAndStart();return;}
-       authScreen();await afterPassword();return;}
-     }catch(e){}
-     authScreen();
-    })();
-   }else if(tries++<60){setTimeout(wait,100);}else{fatal('Could not load the secure sign-in library. Check your internet connection and reload the page.');}
-  })();
- })();
+ gate();
 })();
 
 
