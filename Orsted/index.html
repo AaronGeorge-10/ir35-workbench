@@ -821,7 +821,7 @@ function buildLoginUI(){
  migrateReviews();
 }
 function loginAs(key){CURRENT_USER=Object.assign({},USERS[key]);var _n=document.getElementById('loginName');if(_n&&_n.value.trim())CURRENT_USER.name=_n.value.trim();document.getElementById('loginScreen').style.display='none';renderNav();go(defaultTab(CURRENT_USER.role));}
-function logout(){CURRENT_USER=null;const ls=document.getElementById('loginScreen');if(ls)ls.style.display='flex';}
+function logout(){try{if(window.__sb)window.__sb.auth.signOut();}catch(e){}CURRENT_USER=null;location.reload();}
 function updateHeader(){if(!CURRENT_USER)return;const r=document.querySelector('header .right');if(!r)return;r.innerHTML='<b>'+esc(CURRENT_USER.title)+' — '+esc(CURRENT_USER.name)+'</b><span>Tenant: '+esc(CURRENT_USER.tenant)+' · ruleset '+RULESET_VERSION+'</span><button class="logout" onclick="logout()">Log out</button>';}
 
 function renderNav(){
@@ -920,11 +920,11 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
  async function hydrateAndStart(){
   var tries=0;while(!(window.supabase&&window.supabase.createClient)&&tries<60){await new Promise(function(r){setTimeout(r,100);});tries++;}
   if(!(window.supabase&&window.supabase.createClient)){fatal('Could not load the secure-store library. Check your internet connection and reload the page.');return;}
-  try{window.__sb=window.supabase.createClient(WB.SUPABASE_URL,WB.SUPABASE_ANON_KEY);}catch(e){fatal('Store configuration error. Please contact Aaron.');return;}
-  try{await DB.loadAsync();}catch(e){console.error('WB load failed',e);fatal('Could not reach the '+esc(TENANT.name)+' secure store (London). Check your connection and reload the page.');return;}
+  try{if(!window.__sb)window.__sb=window.supabase.createClient(WB.SUPABASE_URL,WB.SUPABASE_ANON_KEY);}catch(e){fatal('Store configuration error. Please contact Aaron.');return;}
+  try{await DB.loadAsync();}catch(e){console.error('WB load failed',e);fatal('You are signed in, but the '+esc(TENANT.name)+' secure store (London) refused the request. If you have only just been added, your access may not be active yet — contact Aaron. Otherwise check your connection and reload.');return;}
   saveFlagInit();
   var b=document.getElementById('wbBanner');if(b)b.textContent=TENANT.name+' — client-confidential. Off-payroll status determinations. Decision-support, not legal advice.';
-  buildLoginUI();
+  buildLoginUI();var _ls=document.getElementById('loginScreen');if(_ls)_ls.style.display='none';enterAsAuthedUser();
  }
  function gate(){
   var ov=el('div','position:fixed;inset:0;z-index:450;background:linear-gradient(135deg,#0C365F,#001E5A);display:flex;align-items:center;justify-content:center;padding:24px;font-family:Mulish,sans-serif');
@@ -934,7 +934,136 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
   function submit(){if((inp.value||'')===WB.ACCESS_CODE){ov.remove();hydrateAndStart();}else{err.textContent='Incorrect code.';inp.value='';inp.focus();}}
   btn.onclick=submit;inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();submit();}});setTimeout(function(){inp.focus();},80);
  }
- gate();
+ /* ---- Per-user authentication (Supabase Auth: email + password + TOTP MFA) ---- */
+ var ROLE_MAP={platform:'platform',clientadmin:'clientadmin',linemanager:'linemanager',internalreviewer:'internalreviewer',reviewer:'reviewer',contractor:'contractor'};
+ async function enterAsAuthedUser(){
+  var user=null;try{var r=await window.__sb.auth.getUser();user=r&&r.data?r.data.user:null;}catch(e){}
+  if(!user){fatal('Your session could not be read. Please reload and sign in again.');return;}
+  var meta=user.app_metadata||{};var roleKey=ROLE_MAP[meta.role]||null;
+  if(!roleKey||!USERS[roleKey]){fatal('You are signed in, but your account has no Workbench role assigned yet. Contact Aaron to be authorised.');return;}
+  CURRENT_USER=Object.assign({},USERS[roleKey]);
+  CURRENT_USER.name=(user.user_metadata&&user.user_metadata.full_name)||meta.full_name||user.email;
+  CURRENT_USER.email=user.email;
+  if(roleKey!=='platform'&&meta.tenant)CURRENT_USER.tenant=TENANT.name;
+  if(roleKey==='contractor'&&meta.worker_ref)CURRENT_USER.workerRef=meta.worker_ref;
+  var ls=document.getElementById('loginScreen');if(ls)ls.style.display='none';
+  renderNav();go(defaultTab(CURRENT_USER.role));
+ }
+ function abody(){return document.getElementById('wbAuthBody');}
+ function aerr(m){var e=document.getElementById('wbAuthErr');if(e)e.textContent=m||'';}
+ function afield(id,type,ph){return '<input id="'+id+'" type="'+type+'" placeholder="'+ph+'" autocomplete="'+(type==='password'?'current-password':(type==='email'?'username':'off'))+'" style="width:100%;padding:11px 12px;border:1px solid #DBDBDB;border-radius:9px;font-size:14px;font-family:inherit;margin-bottom:8px">';}
+ function abtn(id,label){return '<button id="'+id+'" style="width:100%;margin-top:4px;padding:11px;border:0;border-radius:9px;background:#218380;color:#fff;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit">'+label+'</button>';}
+ function aerrline(){return '<div id="wbAuthErr" style="color:#9C2373;font-size:12px;font-weight:700;margin-top:8px;min-height:15px"></div>';}
+ function authScreen(){
+  var ov=el('div','position:fixed;inset:0;z-index:450;background:linear-gradient(135deg,#0C365F,#001E5A);display:flex;align-items:center;justify-content:center;padding:24px;font-family:Mulish,sans-serif');ov.id='wbAuth';
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:400px;width:100%;padding:30px;box-shadow:0 30px 80px rgba(0,0,0,.4)"><img src="Ascend_Logo_Colour.svg" alt="Ascend" style="height:28px;margin-bottom:12px"><h2 style="font-size:18px;margin-bottom:4px">IR35 Workbench — '+esc(TENANT.name)+'</h2><div style="color:#6b7280;font-size:13px;margin-bottom:16px">Client-confidential. Sign in with your account.</div><div id="wbAuthBody"></div></div>';
+  document.body.appendChild(ov);showPassword();
+ }
+ var GOOGLE_SVG='<svg width="17" height="17" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18c-.44-1.32-.69-2.73-.69-4.18s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>';
+ var APPLE_SVG='<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="#9ca3af"><path d="M16.36 12.78c-.02-2.02 1.65-2.99 1.72-3.04-.94-1.37-2.4-1.56-2.92-1.58-1.24-.13-2.42.73-3.05.73-.63 0-1.6-.71-2.63-.69-1.35.02-2.6.79-3.29 2-1.4 2.43-.36 6.02 1.01 7.99.67.96 1.47 2.04 2.52 2 1.01-.04 1.39-.65 2.62-.65 1.22 0 1.57.65 2.63.63 1.09-.02 1.78-.98 2.45-1.95.77-1.12 1.09-2.2 1.11-2.26-.02-.01-2.13-.82-2.15-3.24zM14.5 6.6c.56-.68.94-1.62.83-2.56-.81.03-1.79.54-2.37 1.21-.52.6-.97 1.56-.85 2.48.9.07 1.83-.46 2.39-1.13z"/></svg>';
+ function asocialBtns(){
+  return '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px;color:#9ca3af;font-size:11px;font-weight:700"><div style="flex:1;height:1px;background:#e5e7eb"></div>OR<div style="flex:1;height:1px;background:#e5e7eb"></div></div>'
+   +'<button id="wbGoogle" style="width:100%;margin-top:0;padding:10px;border:1px solid #DBDBDB;border-radius:9px;background:#fff;color:#3c4043;font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:9px">'+GOOGLE_SVG+'Sign in with Google</button>'
+   +'<button id="wbApple" disabled title="Apple sign-in is coming soon" style="width:100%;margin-top:8px;padding:10px;border:1px solid #e5e7eb;border-radius:9px;background:#f3f4f6;color:#9ca3af;font-weight:600;font-size:14px;cursor:not-allowed;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:9px">'+APPLE_SVG+'Sign in with Apple — coming soon</button>'
+   +'<div style="font-size:11px;color:#9ca3af;margin-top:11px;line-height:1.45">'+esc(TENANT.name)+' staff: sign in with your email and password. Social sign-in is for contractor self-service.</div>';
+ }
+ function showPassword(){
+  abody().innerHTML=afield('wbEmail','email','Email')+afield('wbPass','password','Password')+aerrline()+abtn('wbSignIn','Sign in')+asocialBtns();
+  document.getElementById('wbSignIn').onclick=doPassword;
+  document.getElementById('wbPass').addEventListener('keydown',function(e){if(e.key==='Enter')doPassword();});
+  var g=document.getElementById('wbGoogle');if(g)g.onclick=doGoogle;
+  setTimeout(function(){var x=document.getElementById('wbEmail');if(x)x.focus();},80);
+  if(typeof OAUTH_ERR!=='undefined'&&OAUTH_ERR){aerr(OAUTH_ERR);OAUTH_ERR='';}
+ }
+ async function doGoogle(){
+  aerr('');var g=document.getElementById('wbGoogle');if(g){g.disabled=true;g.style.opacity='.6';}
+  try{
+   var r=await window.__sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}});
+   if(r&&r.error){aerr(r.error.message||'Google sign-in is not available yet — please use your email and password.');if(g){g.disabled=false;g.style.opacity='1';}}
+  }catch(e){aerr('Google sign-in is not available yet — please use your email and password.');if(g){g.disabled=false;g.style.opacity='1';}}
+ }
+ async function doPassword(){
+  aerr('');var email=(document.getElementById('wbEmail').value||'').trim();var pass=document.getElementById('wbPass').value||'';
+  if(!email||!pass){aerr('Enter your email and password.');return;}
+  var b=document.getElementById('wbSignIn');b.disabled=true;b.textContent='Signing in…';
+  var r=await window.__sb.auth.signInWithPassword({email:email,password:pass});
+  b.disabled=false;b.textContent='Sign in';
+  if(r.error){aerr(r.error.message||'Sign-in failed.');return;}
+  await afterPassword();
+ }
+ async function afterPassword(){
+  var aal=await window.__sb.auth.mfa.getAuthenticatorAssuranceLevel();
+  var cur=aal&&aal.data?aal.data.currentLevel:null,nxt=aal&&aal.data?aal.data.nextLevel:null;
+  if(cur==='aal2'){finishAuth();return;}
+  if(nxt==='aal2'){
+   var f=await window.__sb.auth.mfa.listFactors();
+   var totp=f&&f.data&&f.data.totp&&f.data.totp.length?f.data.totp[0]:null;
+   if(totp){showChallenge(totp.id);}else{showEnroll();}
+  }else{showEnroll();}
+ }
+ function finishAuth(){var ov=document.getElementById('wbAuth');if(ov)ov.remove();hydrateAndStart();}
+ async function showEnroll(){
+  abody().innerHTML='<div style="font-size:13px;color:#333;margin-bottom:10px">Set up two-factor authentication. Scan this with an authenticator app (Microsoft/Google Authenticator, 1Password…), then enter the 6-digit code.</div><div id="wbQR" style="text-align:center;margin-bottom:10px;min-height:180px"></div>'+afield('wbCode','text','6-digit code')+aerrline()+abtn('wbVerify','Verify & continue');
+  var en=await window.__sb.auth.mfa.enroll({factorType:'totp'});
+  if(en.error){aerr(en.error.message||'Could not start MFA setup.');return;}
+  var fid=en.data.id;var qr=en.data.totp&&en.data.totp.qr_code;
+  if(qr){document.getElementById('wbQR').innerHTML='<img alt="QR" style="width:180px;height:180px" src="'+qr+'">';}
+  document.getElementById('wbVerify').onclick=function(){verifyFactor(fid);};
+  document.getElementById('wbCode').addEventListener('keydown',function(e){if(e.key==='Enter')verifyFactor(fid);});
+ }
+ async function showChallenge(fid){
+  abody().innerHTML='<div style="font-size:13px;color:#333;margin-bottom:10px">Enter the 6-digit code from your authenticator app.</div>'+afield('wbCode','text','6-digit code')+aerrline()+abtn('wbVerify','Verify & continue');
+  document.getElementById('wbVerify').onclick=function(){verifyFactor(fid);};
+  document.getElementById('wbCode').addEventListener('keydown',function(e){if(e.key==='Enter')verifyFactor(fid);});
+  setTimeout(function(){var x=document.getElementById('wbCode');if(x)x.focus();},80);
+ }
+ async function verifyFactor(fid){
+  aerr('');var code=(document.getElementById('wbCode').value||'').trim();if(!/^[0-9]{6}$/.test(code)){aerr('Enter the 6-digit code.');return;}
+  var v=document.getElementById('wbVerify');v.disabled=true;v.textContent='Verifying…';
+  var ch=await window.__sb.auth.mfa.challenge({factorId:fid});
+  if(ch.error){v.disabled=false;v.textContent='Verify & continue';aerr(ch.error.message);return;}
+  var res=await window.__sb.auth.mfa.verify({factorId:fid,challengeId:ch.data.id,code:code});
+  v.disabled=false;v.textContent='Verify & continue';
+  if(res.error){aerr(res.error.message||'Incorrect code.');return;}
+  finishAuth();
+ }
+ /* First-time onboarding (invite / password reset): set a password, then MFA. */
+ function showSetPassword(){
+  abody().innerHTML='<div style="font-size:13px;color:#333;margin-bottom:10px">Welcome. Set a password for your Workbench account to continue.</div>'+afield('wbNewPass','password','New password (min 8 characters)')+afield('wbNewPass2','password','Confirm password')+aerrline()+abtn('wbSetPw','Set password & continue');
+  document.getElementById('wbSetPw').onclick=doSetPassword;
+  document.getElementById('wbNewPass2').addEventListener('keydown',function(e){if(e.key==='Enter')doSetPassword();});
+  setTimeout(function(){var x=document.getElementById('wbNewPass');if(x)x.focus();},80);
+ }
+ async function doSetPassword(){
+  aerr('');var p1=document.getElementById('wbNewPass').value||'';var p2=document.getElementById('wbNewPass2').value||'';
+  if(p1.length<8){aerr('Password must be at least 8 characters.');return;}
+  if(p1!==p2){aerr('Passwords do not match.');return;}
+  var b=document.getElementById('wbSetPw');b.disabled=true;b.textContent='Saving…';
+  var r=await window.__sb.auth.updateUser({password:p1});
+  b.disabled=false;b.textContent='Set password & continue';
+  if(r.error){aerr(r.error.message||'Could not set password.');return;}
+  await afterPassword();
+ }
+ /* entry: handle invite/reset, else resume an aal2 session, else show sign-in */
+ var INVITE_FLOW = /type=(invite|recovery)/.test((window.location.hash||'')+(window.location.search||''));
+ /* Surface an OAuth error handed back on the redirect (e.g. sign-ups off, provider not enabled) */
+ var OAUTH_ERR='';try{var _h=(window.location.hash||'')+'&'+(window.location.search||'');var _m=_h.match(/error_description=([^&]+)/);if(_m){OAUTH_ERR=decodeURIComponent(_m[1].replace(/\+/g,' '));}else if(/[?#&]error=/.test(_h)){OAUTH_ERR='Google sign-in is not available yet — please use your email and password.';}}catch(e){}
+ (function boot(){
+  var tries=0;(function wait(){
+   if(window.supabase&&window.supabase.createClient){
+    try{if(!window.__sb)window.__sb=window.supabase.createClient(WB.SUPABASE_URL,WB.SUPABASE_ANON_KEY);}catch(e){fatal('Store configuration error. Please contact Aaron.');return;}
+    (async function(){
+     try{var s=await window.__sb.auth.getSession();var sess=s&&s.data?s.data.session:null;
+      if(INVITE_FLOW&&sess){authScreen();showSetPassword();return;}
+      if(sess){var aal=await window.__sb.auth.mfa.getAuthenticatorAssuranceLevel();
+       if(aal&&aal.data&&aal.data.currentLevel==='aal2'){hydrateAndStart();return;}
+       authScreen();await afterPassword();return;}
+     }catch(e){}
+     authScreen();
+    })();
+   }else if(tries++<60){setTimeout(wait,100);}else{fatal('Could not load the secure sign-in library. Check your internet connection and reload the page.');}
+  })();
+ })();
 })();
 
 
