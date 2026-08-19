@@ -442,7 +442,13 @@ function assess(answers){
   msg='The key tests are clearly positive and the wider picture supports it. A Status Determination Statement can be drafted for sign-off.';}
  else{outcome='border';title='BORDERLINE — routed to expert review';
   msg='The picture is mixed — in particular the key tests are not clearly positive. This case is automatically queued for a qualified IR35 specialist before any SDS can issue. This human gate is what protects the hirer’s reasonable-care position.';}
- if(flags.length && outcome!=='border'){
+ /* The review flag intercepts a would-be OUTSIDE call only. Two things it must never do:
+    (a) override the statutory office-holder rule — an office-holder is inside by statute and
+        no flag, reviewer or score may move that; before 19 Aug 2026 M12="Yes — employee"
+        turned an office-holder into "Borderline", and a reviewer could then sign it Outside;
+    (b) soften a clear INSIDE into "the picture is mixed" — flagging exists to stop a wrong
+        Outside, not to dilute a correct Inside. */
+ if(flags.length && outcome==='out'){
   outcome='border';title='BORDERLINE — routed to expert review';
   msg='A flagged response (the contractor has previously worked for the client as an employee) warrants further investigation before any determination can issue. This case is routed to a qualified IR35 specialist. This human gate is what protects the hirer’s reasonable-care position.';}
  return {rulesetVersion:RULESET_VERSION,keyScore,minorScore,total,office,outcome,title,msg,strengths,risks,items,flags,autoSDS:(outcome!=='border')};
@@ -486,10 +492,35 @@ const DB={
  KEY:'ir35wb3_v03',mem:null,
  _read(){return this.mem;},
  _write(s){this.mem=s;this.s=s;this._persist(s);},
- _persist(s){try{if(window.__sb){window.__sb.from('tenant_state').upsert({client_id:WB.CLIENT_ID,state:s,updated_at:new Date().toISOString()},{onConflict:'client_id'}).then(function(r){if(r&&r.error)console.error('WB save error',r.error);if(window.__wbSaveFlag)window.__wbSaveFlag(r&&r.error?'err':'ok');});}}catch(e){console.error('WB persist exception',e);}},
+ /* A failed save must be impossible to miss. Until 19 Aug 2026 this had no .catch(), so a
+    dropped connection produced an unhandled rejection and the user saw NOTHING — while the
+    SDS rendered on screen, printable, with a reference number. A missing window.__sb was a
+    silent no-op for the same reason. Both now raise a persistent banner that does not fade. */
+ _persist(s){
+  var fail=function(why,detail){console.error('WB save failed:',why,detail||'');
+   if(window.__wbSaveFailed)window.__wbSaveFailed(why); else if(window.__wbSaveFlag)window.__wbSaveFlag('err');};
+  try{
+   if(!window.__sb){fail('there is no connection to the secure store');return;}
+   window.__sb.from('tenant_state').upsert({client_id:WB.CLIENT_ID,state:s,updated_at:new Date().toISOString()},{onConflict:'client_id'})
+    .then(function(r){if(r&&r.error){fail('the secure store rejected the write',r.error.message);}
+                      else if(window.__wbSaveFlag){window.__wbSaveFlag('ok');}})
+    .catch(function(e){fail('the write did not reach the secure store',e&&e.message);});
+  }catch(e){fail('of an unexpected error while saving',e&&e.message);}
+ },
  load(){let s=this._read();if(!s){s=this.seed();}this.s=s;return s;},
- async loadAsync(){var r=await window.__sb.from('tenant_state').select('state').eq('client_id',WB.CLIENT_ID).maybeSingle();if(r.error)throw r.error;var s=(r.data&&r.data.state)?r.data.state:null;if(!s){s=this.seed();this._write(s);}else{this.s=s;this.mem=s;}return this.s;},
+ async loadAsync(){var r=await window.__sb.from('tenant_state').select('state').eq('client_id',WB.CLIENT_ID).maybeSingle();if(r.error)throw r.error;var s=(r.data&&r.data.state)?r.data.state:null;
+  /* NEVER seed-and-write on an empty read. Until 19 Aug 2026 this branch wrote an empty
+     tenant straight over the row, so an RLS change, a client_id drift or a null state
+     destroyed every worker, SDS, review and audit line on a single page load, with a
+     green "Saved" toast and no user action. A missing row is now a hard stop: an empty
+     tenant is only ever created deliberately via DB.initialiseEmptyTenant(). */
+  if(!s){var e=new Error('NO_TENANT_ROW');e.__noTenantRow=true;throw e;}
+  {this.s=s;this.mem=s;}return this.s;},
  reset(){this.mem=null;this.s=this.seed();this._write(this.s);},
+ /* The ONLY sanctioned way to create a tenant store. Deliberately not wired to any button:
+    a control that initialises a tenant store is a control that can destroy one. Provision the
+    row at onboarding, or have the platform admin call this once from the console. */
+ initialiseEmptyTenant(){if(this.s&&((this.s.workers||[]).length||(this.s.roles||[]).length)){throw new Error('Refusing to initialise — this tenant already holds data.');}this.mem=null;this.s=this.seed();this._write(this.s);return this.s;},
  save(){this._write(this.s);},
  nextId(p){/* Permanent reference allocator. Never reissues a number already present in the data, even if this.s.seq has been rolled back by a restore. Aaron George / Archie, 19 Aug 2026. */var hi=0,s=this.s;var scan=function(a,k){(a||[]).forEach(function(o){var m=String((o&&o[k])||'').match(/(\d+)\s*$/);if(m){var n=parseInt(m[1],10);if(n>hi)hi=n;}});};scan(s.roles,'roleId');scan(s.workers,'ref');scan(s.sds,'ref');var next=Math.max(2400+((s.seq||0)+1),hi+1,2401);s.seq=next-2400;return p+'-'+String(next);},
  audit(entity,type,actor,text){this.s.audit.unshift({tenantId:TENANT.id,entity,type,actor,when:NOW+' '+new Date().toTimeString().slice(0,5),detail:text||''});this.save();},
@@ -858,6 +889,9 @@ function signOff(ref){
  if(dec==='Needs more info'){r.status='Returned for info';r.reasoning=rea;DB.audit(ref,'Returned for more information ('+stageLabel(r.stage||1)+')',CURRENT_USER.name,rea);renderNav();go('review');return;}
  const stageTxt=(r.stage===2)?'external expert':'internal senior reviewer';
  r.status='Signed off ('+(r.stage===2?'external':'internal')+')';r.decision=dec;r.reasoning=rea;r.signedOffBy=CURRENT_USER.name+' — '+CURRENT_USER.title;r.signedOffAt=NOW+' '+new Date().toTimeString().slice(0,5);
+ /* Statutory backstop: an office-holder is inside IR35 by law. A reviewer may not release
+    an Outside determination for one, whatever the score or their reasoning. */
+ if(dec==='Outside'&&w&&w.office){alert('This engagement is recorded as a statutory office-holder (O1). An office-holder is inside IR35 by statute, so an Outside determination cannot be released.\n\nIf O1 was answered in error, correct the assessment rather than signing off here.');return;}
  const outcome=dec==='Outside'?'out':'in';w.outcome=outcome;w.status=dec;w.sdsState='Issued';w.nextReview=addMonths(NOW,12);w.lastSDS=NOW;
  const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12),reviewer:r.signedOffBy,reviewerReasoning:rea});
  DB.audit(ref,'Borderline signed off by '+stageTxt,CURRENT_USER.name,'Decision: '+dec+'. '+rea);DB.audit(ref,'SDS issued','Ascend Workforce Solutions',sref+' — '+dec+' (released after '+stageTxt+' sign-off)');
@@ -875,13 +909,21 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
 /* ===== Live boot: access-code gate → Ørsted Supabase (London) hydrate ===== */
 (function(){
  function el(tag,css,html){var e=document.createElement(tag);if(css)e.style.cssText=css;if(html!=null)e.innerHTML=html;return e;}
- function saveFlagInit(){var f=el('div','position:fixed;bottom:12px;right:14px;z-index:400;font:600 11px Mulish,sans-serif;padding:6px 12px;border-radius:8px;background:#e3f0ef;color:#176561;box-shadow:0 4px 14px rgba(0,0,0,.12);opacity:0;transition:opacity .3s;pointer-events:none');f.id='wbSave';document.body.appendChild(f);window.__wbSaveFlag=function(st){f.textContent=st==='err'?'⚠ Not saved — check connection':'✓ Saved to secure store';f.style.background=st==='err'?'#f5e4ef':'#e3f0ef';f.style.color=st==='err'?'#9C2373':'#176561';f.style.opacity='1';clearTimeout(f._t);f._t=setTimeout(function(){f.style.opacity='0';},2200);};}
+ function saveFlagInit(){var f=el('div','position:fixed;bottom:12px;right:14px;z-index:400;font:600 11px Mulish,sans-serif;padding:6px 12px;border-radius:8px;background:#e3f0ef;color:#176561;box-shadow:0 4px 14px rgba(0,0,0,.12);opacity:0;transition:opacity .3s;pointer-events:none');f.id='wbSave';document.body.appendChild(f);window.__wbSaveFlag=function(st){f.textContent=st==='err'?'⚠ Not saved — check connection':'✓ Saved to secure store';f.style.background=st==='err'?'#f5e4ef':'#e3f0ef';f.style.color=st==='err'?'#9C2373':'#176561';f.style.opacity='1';clearTimeout(f._t);f._t=setTimeout(function(){f.style.opacity='0';},2200);};
+  /* Persistent, non-fading failure banner. A 2.2-second toast is not adequate warning that a
+     compliance record was not written. */
+  window.__wbSaveFailed=function(why){var id='wbSaveFail';var b=document.getElementById(id);
+   if(!b){b=el('div','position:fixed;left:0;right:0;top:0;z-index:600;background:#9C2373;color:#fff;font:700 13px Mulish,sans-serif;padding:12px 18px;text-align:center;box-shadow:0 4px 18px rgba(0,0,0,.3)');b.id=id;document.body.appendChild(b);}
+   b.innerHTML='\u26a0 NOT SAVED \u2014 your last change was not written to the secure store because '+why+'. Do not rely on anything shown on screen. Copy anything you have just entered, then reload this page and re-enter it.';};}
  function fatal(msg){var o=el('div','position:fixed;inset:0;z-index:500;background:#001E5A;color:#fff;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:Mulish,sans-serif');o.innerHTML='<div style="max-width:460px"><div style="font-size:20px;font-weight:800;margin-bottom:10px">Secure store unavailable</div><p style="font-size:14px;line-height:1.5;opacity:.92">'+msg+'</p><p style="font-size:12px;opacity:.7;margin-top:14px">Do not enter assessments until this is resolved — nothing would be saved.</p></div>';document.body.appendChild(o);}
  async function hydrateAndStart(){
   var tries=0;while(!(window.supabase&&window.supabase.createClient)&&tries<60){await new Promise(function(r){setTimeout(r,100);});tries++;}
   if(!(window.supabase&&window.supabase.createClient)){fatal('Could not load the secure-store library. Check your internet connection and reload the page.');return;}
   try{if(!window.__sb)window.__sb=window.supabase.createClient(WB.SUPABASE_URL,WB.SUPABASE_ANON_KEY);}catch(e){fatal('Store configuration error. Please contact Aaron.');return;}
-  try{await DB.loadAsync();}catch(e){console.error('WB load failed',e);fatal('You are signed in, but the '+esc(TENANT.name)+' secure store (London) refused the request. If you have only just been added, your access may not be active yet — contact Aaron. Otherwise check your connection and reload.');return;}
+  try{await DB.loadAsync();}catch(e){console.error('WB load failed',e);
+   if(e&&e.__noTenantRow){fatal('You are signed in, but no secure store exists yet for '+esc(TENANT.name)+'. This is an onboarding step, not a fault with your account — contact Aaron so the tenant store can be provisioned. <b>Nothing has been created or overwritten.</b>');}
+   else{fatal('You are signed in, but the '+esc(TENANT.name)+' secure store (London) refused the request. If you have only just been added, your access may not be active yet — contact Aaron. Otherwise check your connection and reload.');}
+   return;}
   saveFlagInit();
   var b=document.getElementById('wbBanner');if(b)b.textContent=TENANT.name+' — client-confidential. Off-payroll status determinations. Decision-support, not legal advice.';
   buildLoginUI();var _ls=document.getElementById('loginScreen');if(_ls)_ls.style.display='none';enterAsAuthedUser();
@@ -1250,7 +1292,13 @@ function assess(answers,ruleset){
   msg='The key tests are clearly positive and the wider picture supports it. A Status Determination Statement can be drafted for sign-off.';}
  else{outcome='border';title='BORDERLINE — routed to expert review';
   msg='The picture is mixed — in particular the key tests are not clearly positive. This case is automatically queued for a qualified IR35 specialist before any SDS can issue. This human gate is what protects the hirer’s reasonable-care position.';}
- if(flags.length && outcome!=='border'){
+ /* The review flag intercepts a would-be OUTSIDE call only. Two things it must never do:
+    (a) override the statutory office-holder rule — an office-holder is inside by statute and
+        no flag, reviewer or score may move that; before 19 Aug 2026 M12="Yes — employee"
+        turned an office-holder into "Borderline", and a reviewer could then sign it Outside;
+    (b) soften a clear INSIDE into "the picture is mixed" — flagging exists to stop a wrong
+        Outside, not to dilute a correct Inside. */
+ if(flags.length && outcome==='out'){
   outcome='border';title='BORDERLINE — routed to expert review';
   msg='A flagged response (the contractor has previously worked for the client as an employee) warrants further investigation before any determination can issue. This case is routed to a qualified IR35 specialist. This human gate is what protects the hirer’s reasonable-care position.';}
  return {rulesetVersion:RULESET_VERSION,keyScore,minorScore,total,office,outcome,title,msg,strengths,risks,items,flags,autoSDS:(outcome!=='border')};
