@@ -256,7 +256,7 @@ window.WB={CLIENT_ID:'orsted',TENANT_NAME:'Ørsted',SUPABASE_URL:'https://feevwg
   <span class="chip" id="regCount"></span>
   <button class="btn sec" style="margin-left:auto;padding:8px 16px" onclick="exportRegisterCSV()">Export register (CSV)</button>
  </div>
- <div class="card" style="padding:6px 18px 14px"><table><thead><tr><th>Ref</th><th>Worker / PSC</th><th>Role</th><th>Engagement</th><th>Day rate</th><th>Status</th><th>SDS</th><th>Insurance</th><th>Next review</th></tr></thead><tbody id="regBody"></tbody></table></div>
+ <div class="card" style="padding:6px 18px 14px"><table><thead><tr><th>Ref</th><th>Worker / PSC</th><th>Role</th><th>Engagement</th><th>Day rate</th><th>Status</th><th>SDS</th><th>Next review</th></tr></thead><tbody id="regBody"></tbody></table></div>
 </section>
 
 <section class="view" id="review">
@@ -565,15 +565,12 @@ function renderDashboard(){
  const out=c('out'),ins=c('in'),bor=c('border'),pen=c('pending');
  const sds=ws.filter(w=>w.sdsState==='Issued').length;
  const open=DB.reviews().filter(r=>r.status==='Awaiting review'||r.status==='In review').length;
- const cov=ws.filter(w=>w.insurance&&w.insurance.status==='Covered').length;
- const unc=ws.filter(w=>w.insurance&&w.insurance.status==='Not covered').length;
  const assessed=out+ins+bor;
  document.getElementById('dashKpis').innerHTML=
   kpi('Workers in scope',n,'across '+TENANT.name,'')+
   kpi('SDS issued',sds,(assessed?Math.round(sds/n*100):0)+'% coverage','up')+
   kpi('Outside IR35',out,(n?Math.round(out/n*100):0)+'% of workers','')+
-  kpi('Borderline / review',open,'awaiting expert sign-off','dn')+
-  kpi('Insurance cover',cov+'/'+n,unc+' uncovered (risk)','');
+  kpi('Borderline / review',open,'awaiting expert sign-off','dn');
  const segs=[{label:'Outside',value:out,color:'#218380'},{label:'Inside',value:ins,color:'#9C2373'},{label:'Borderline',value:bor,color:'#003182'}];
  document.getElementById('chartSplit').innerHTML=donut(segs)+'<div class="legend"><span><i style="background:#218380"></i>Outside '+out+'</span><span><i style="background:#9C2373"></i>Inside '+ins+'</span><span><i style="background:#003182"></i>Borderline '+bor+'</span><span><i style="background:#DBDBDB"></i>Pending '+pen+'</span></div>';
  // outcomes by engagement bucket (stacked)
@@ -584,8 +581,7 @@ function renderDashboard(){
  document.getElementById('chartHealth').innerHTML=
   hb('SDS coverage',n?Math.round(sds/n*100):0,'var(--teal)')+
   hb('Reviewed / scheduled within 12 months',n?Math.round(ws.filter(w=>w.nextReview).length/n*100):0,'var(--navy)')+
-  hb('Borderline cases routed to expert',bor?100:0,'var(--green)')+
-  hb('Insurance coverage',n?Math.round(cov/n*100):0,'var(--teal)');
+  hb('Borderline cases routed to expert',bor?100:0,'var(--green)');
  const bq=ws.filter(w=>w.outcome==='border');
  document.getElementById('dashBorder').innerHTML='<table><thead><tr><th>Ref</th><th>Role</th><th>Engagement</th><th>Day rate</th><th>Provisional</th><th class="small">Action</th></tr></thead><tbody>'+bq.map(w=>'<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>£'+w.rate+'</td><td>'+pill('Borderline')+'</td><td><a href="#" style="color:var(--teal);font-weight:600" onclick="go(\'review\');return false;">Open review →</a></td></tr>').join('')+'</tbody></table>';
 }
@@ -597,8 +593,7 @@ function renderRegister(){
  const _mine=(CURRENT_USER&&CURRENT_USER.role==='linemanager'&&document.getElementById('lmMine')&&document.getElementById('lmMine').checked)?CURRENT_USER.myRefs:null;const rows=ws.filter(w=>(!f||w.status===f)&&(!q||(w.ref+w.worker+w.role+w.engagement).toLowerCase().includes(q))&&(!_mine||_mine.indexOf(w.ref)>=0));
  document.getElementById('regBody').innerHTML=rows.map(w=>{
   const sdsLink=w.sdsState==='Issued'?'<a href="#" style="color:var(--teal);font-weight:600" onclick="openSDS(\''+w.ref+'\');return false;">View SDS</a>':(w.sdsState==='Referred'?'<span class="pill p-border">Referred</span>':'<span class="small">—</span>');
-  const ins=w.insurance?'<span class="pill '+({Covered:'p-out','Not covered':'p-in',Pending:'p-pending'}[w.insurance.status]||'p-pending')+'">'+w.insurance.status+'</span>':'';
-  return '<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.worker)+'</td><td class="small">'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>£'+w.rate+'</td><td>'+pill(w.status)+'</td><td class="small">'+sdsLink+'</td><td>'+ins+'</td><td class="small">'+(w.nextReview?fmtDate(w.nextReview):'—')+'</td></tr>';
+  return '<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.worker)+'</td><td class="small">'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>£'+w.rate+'</td><td>'+pill(w.status)+'</td><td class="small">'+sdsLink+'</td><td class="small">'+(w.nextReview?fmtDate(w.nextReview):'—')+'</td></tr>';
  }).join('');
  document.getElementById('regCount').textContent=rows.length+' of '+ws.length+' workers';
 }
@@ -646,7 +641,7 @@ function runAssess(){
  h+='</div>';
  document.getElementById('assessResult').innerHTML=h;
 }
-function mkWorker(ref,a,outcome){const w={tenantId:TENANT.id,ref,worker:a.worker,role:a.role,engagement:'Entered via live assessment',rate:0,bucket:'Other',insurance:{status:'Pending'},answers:a.answers,evidence:a.evidence,outcome,key:a.d.keyScore,minor:a.d.minorScore,total:a.d.total,office:a.d.office,status:capOutcome(outcome),assessedOn:NOW,sdsState:'None',nextReview:null,full:true};DB.s.workers.push(w);return w;}
+function mkWorker(ref,a,outcome){const w={tenantId:TENANT.id,ref,worker:a.worker,role:a.role,engagement:'Entered via live assessment',rate:0,bucket:'Other',answers:a.answers,evidence:a.evidence,outcome,key:a.d.keyScore,minor:a.d.minorScore,total:a.d.total,office:a.d.office,status:capOutcome(outcome),assessedOn:NOW,sdsState:'None',nextReview:null,full:true};DB.s.workers.push(w);return w;}
 function commitSDS(){const a=lastA,ref=DB.nextId('AS'),w=mkWorker(ref,a,a.d.outcome);const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome:a.d.outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12)});w.sdsState='Issued';w.nextReview=addMonths(NOW,12);w.lastSDS=NOW;DB.audit(ref,'Assessment completed',(CURRENT_USER?CURRENT_USER.name:'Client')+' ('+RESP+' respondent)','Outcome '+capOutcome(a.d.outcome)+' · key '+sgn(a.d.keyScore)+' · total '+sgn(a.d.total));DB.audit(ref,'SDS issued','Ascend Workforce Solutions',sref+' — '+capOutcome(a.d.outcome)+(a.d.office?' (office-holder override)':''));renderNav();openSDS(ref);}
 function commitBorder(){const a=lastA,ref=DB.nextId('AS'),w=mkWorker(ref,a,'border');w.sdsState='Referred';DB.s.reviews.push({tenantId:TENANT.id,workerRef:ref,reason:'Borderline',raisedAt:NOW+' '+new Date().toTimeString().slice(0,5),assignedTo:'Orsted Head of Tax (internal senior reviewer)',status:'Awaiting internal review',slaDue:addDays(NOW,5),rulesetVersion:RULESET_VERSION,stage:1,decision:null,reasoning:''});DB.audit(ref,'Assessment completed',(CURRENT_USER?CURRENT_USER.name:'Client')+' ('+RESP+' respondent)','Outcome Borderline · key '+sgn(a.d.keyScore)+' · total '+sgn(a.d.total));DB.audit(ref,'Routed to expert review','Engine (borderline gate)','No SDS issued. SLA due '+addDays(NOW,5)+'.');if(a.outstanding&&a.outstanding.length){DB.audit(ref,'Contractor questions outstanding','Respondent scoping',a.outstanding.join(', ')+' — contractor-sourced, not answerable by the hirer. Scored neutral pending the contractor questionnaire.');}renderNav();go('review');}
 
