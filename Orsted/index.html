@@ -509,7 +509,7 @@ const DB={
  async loadAsync(){var r=await window.__sb.from('tenant_state').select('state').eq('client_id',WB.CLIENT_ID).maybeSingle();if(r.error)throw r.error;var s=(r.data&&r.data.state)?r.data.state:null;if(!s){s=this.seed();this._write(s);}else{this.s=s;this.mem=s;}return this.s;},
  reset(){this.mem=null;this.s=this.seed();this._write(this.s);},
  save(){this._write(this.s);},
- nextId(p){this.s.seq=(this.s.seq||0)+1;return p+'-'+String(2400+this.s.seq);},
+ nextId(p){/* Permanent reference allocator. Never reissues a number already present in the data, even if this.s.seq has been rolled back by a restore. Aaron George / Archie, 19 Aug 2026. */var hi=0,s=this.s;var scan=function(a,k){(a||[]).forEach(function(o){var m=String((o&&o[k])||'').match(/(\d+)\s*$/);if(m){var n=parseInt(m[1],10);if(n>hi)hi=n;}});};scan(s.roles,'roleId');scan(s.workers,'ref');scan(s.sds,'ref');var next=Math.max(2400+((s.seq||0)+1),hi+1,2401);s.seq=next-2400;return p+'-'+String(next);},
  audit(entity,type,actor,text){this.s.audit.unshift({tenantId:TENANT.id,entity,type,actor,when:NOW+' '+new Date().toTimeString().slice(0,5),detail:text||''});this.save();},
  workers(){return this.s.workers.filter(w=>w.tenantId===TENANT.id);},
  worker(ref){return this.s.workers.find(w=>w.ref===ref&&w.tenantId===TENANT.id);},
