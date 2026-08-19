@@ -1354,4 +1354,194 @@ function renderLibrary(){ensureRoles();EDIT_ROLE_ID=null;
 }
 
 function exportRegisterCSV(){try{var ws=DB.workers();if(!ws.length){alert('No workers in the register yet.');return;}var rows=[['Ref','Worker / PSC','Role','Engagement','Day rate','Outcome','SDS state','Assessed on','Next review']];ws.forEach(function(w){rows.push([w.ref,w.worker||'',w.role||'',w.engagement||'',w.rate||'',w.status||'',w.sdsState||'',w.assessedOn||'',w.nextReview||'']);});var csv=rows.map(function(r){return r.map(function(c){c=(c==null?'':String(c));return '"'+c.replace(/"/g,'""')+'"';}).join(',');}).join('\r\n');var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='IR35_Register_'+String(TENANT.name||'client').replace(/[^\w]/g,'')+'_'+NOW+'.csv';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();URL.revokeObjectURL(a.href);},100);}catch(e){alert('Export failed: '+e.message);}}
+
+/* ============================================================================
+   S-02 · ROLE LIBRARY CUT-OVER (Aaron, 19 Aug 2026)
+   The role library now reads and writes public.roles / public.role_assessments
+   in Postgres. It no longer touches tenant_state.state->'roles'.
+
+   Why: the blob was upserted wholesale on every save, so two people editing at
+   once silently erased each other, and nextId() allocated references from
+   whatever blob happened to be in the browser. Reference allocation is now
+   next_role_ref(), serialised by an advisory lock in the database.
+
+   The blob's roles array is deliberately LEFT IN PLACE, frozen, as a rollback
+   copy. Nothing reads it any more. Do not "tidy" it away until the app has run
+   on tables for a while.
+
+   Shape note: rows are mapped back into the shape the existing render code
+   already expects (roleId/key/total/rs/by/date), so no view code changed.
+   ========================================================================== */
+let ROLE_CACHE = null;          // null = not loaded yet
+let ROLE_LOAD_ERR = null;
+
+function roleRowToView(r){
+ const d = (s)=> (s? String(s).slice(0,10) : null);
+ const created = d(r.created_at), updated = d(r.updated_at);
+ return {
+  tenantId : r.client_id,
+  roleId   : r.role_ref,
+  title    : r.title,
+  sector   : r.sector || '—',
+  engagement: r.engagement || '—',
+  answers  : r.answers || {},
+  evidence : r.evidence || {},
+  lean     : r.lean,
+  outcome  : r.outcome,
+  key      : r.key_score,
+  total    : r.total_score,
+  office   : !!r.office,
+  rs       : r.ruleset_version,
+  by       : r.created_by || '—',
+  date     : created,
+  updated  : (updated && updated !== created) ? updated : null,
+  stale    : !!r.stale
+ };
+}
+
+async function loadRoles(force){
+ if(ROLE_CACHE && !force) return ROLE_CACHE;
+ try{
+  const r = await window.__sb.from('roles')
+    .select('*')
+    .eq('client_id', WB.CLIENT_ID)
+    .is('deleted_at', null)
+    .order('role_ref', {ascending:true});
+  if(r.error) throw r.error;
+  ROLE_CACHE = (r.data||[]).map(roleRowToView);
+  ROLE_LOAD_ERR = null;
+ }catch(e){
+  ROLE_LOAD_ERR = (e && e.message) || String(e);
+  console.error('Role library load failed', e);
+  ROLE_CACHE = ROLE_CACHE || [];
+ }
+ return ROLE_CACHE;
+}
+
+/* kept so existing call sites still work; the cache is the source of truth now */
+function ensureRoles(){ if(!DB.s) DB.load(); return ROLE_CACHE || []; }
+function rolesList(){ return ROLE_CACHE || []; }
+function roleByRef(ref){ return (ROLE_CACHE||[]).find(x=>x.roleId===ref) || null; }
+
+function roleWriteFailed(what, err){
+ alert('Could not '+what+'.\n\n'+(err||'The secure store did not accept the change.')+
+       '\n\nNothing has been saved. Copy anything you have just entered, then reload and try again.');
+}
+
+async function commitRole(){
+ if(!lastRole) return;
+ const d = lastRole.d, lean = d.office ? 'Inside' : capOutcome(d.outcome);
+ const who = (CURRENT_USER ? CURRENT_USER.name : 'Client respondent');
+ const base = {
+   client_id: WB.CLIENT_ID,
+   title: lastRole.title || '[Role]',
+   sector: lastRole.sector || null,
+   engagement: lastRole.engagement || null,
+   answers: lastRole.answers,
+   evidence: lastRole.evidence || {},
+   lean: lean, outcome: d.outcome,
+   key_score: d.keyScore, minor_score: d.minorScore, total_score: d.total,
+   office: !!d.office, ruleset_version: RULESET_VERSION
+ };
+ try{
+  if(EDIT_ROLE_ID){
+   const upd = await window.__sb.from('roles')
+     .update(Object.assign({}, base, {updated_by: who}))
+     .eq('client_id', WB.CLIENT_ID).eq('role_ref', EDIT_ROLE_ID).is('deleted_at', null)
+     .select('id').maybeSingle();
+   if(upd.error) throw upd.error;
+   if(!upd.data) throw new Error('That role no longer exists — it may have been deleted by someone else.');
+   const hist = await window.__sb.from('role_assessments').insert(Object.assign({}, base, {role_id: upd.data.id, assessed_by: who}));
+   if(hist.error) throw hist.error;
+   DB.audit(EDIT_ROLE_ID,'Role edited','Role library','Provisional lean '+lean+' · '+RULESET_VERSION);
+   EDIT_ROLE_ID=null;
+  }else{
+   const ref = await window.__sb.rpc('next_role_ref', {p_client_id: WB.CLIENT_ID});
+   if(ref.error) throw ref.error;
+   const ins = await window.__sb.from('roles')
+     .insert(Object.assign({}, base, {role_ref: ref.data, created_by: who, updated_by: who}))
+     .select('id, role_ref').maybeSingle();
+   if(ins.error) throw ins.error;
+   const hist = await window.__sb.from('role_assessments').insert(Object.assign({}, base, {role_id: ins.data.id, assessed_by: who}));
+   if(hist.error) throw hist.error;
+   DB.audit(ins.data.role_ref,'Role added to library','Role library','Provisional lean '+lean+' · '+RULESET_VERSION);
+  }
+ }catch(e){ roleWriteFailed('save this role', e && e.message); return; }
+ await loadRoles(true);
+ go('library');
+}
+
+function editRole(roleId){
+ if(!canEditRoles()) return;
+ const r = roleByRef(roleId); if(!r) return;
+ PREFILL_SOURCE=null; ASSESS_MODE='role'; go('assess'); EDIT_ROLE_ID=r.roleId;
+ const ar=document.getElementById('aRole'); if(ar){ar.value=r.title;ar.readOnly=false;}
+ const asx=document.getElementById('aSector'); if(asx)asx.value=(r.sector==='—'?'':r.sector);
+ const aeg=document.getElementById('aEngagement'); if(aeg)aeg.value=(r.engagement==='—'?'':r.engagement);
+ applyAnswers(r.answers, r.evidence||{});
+ document.getElementById('assessResult').innerHTML='<div class="card"><h3><span class="dot"></span>Editing '+esc(r.roleId)+'</h3><p class="small">Editing <b>'+esc(r.title)+'</b>. Change the role title, sector, engagement or any answer, then <b>Run</b> and <b>Save to role library</b> to update this role. The previous version is kept in the role’s assessment history.</p></div>';
+}
+
+async function deleteRole(roleId){
+ if(!canEditRoles()) return;
+ const r = roleByRef(roleId); if(!r) return;
+ if(!window.confirm('Remove role “'+r.title+'” ('+r.roleId+') from the library?\n\nThe record and its assessment history are retained — a role can be the recorded provenance of a worker determination — but it will no longer appear in the library or be available for pre-fill.')) return;
+ try{
+  const who = (CURRENT_USER ? CURRENT_USER.name : 'Client respondent');
+  const up = await window.__sb.from('roles')
+    .update({deleted_at:new Date().toISOString(), deleted_by:who})
+    .eq('client_id', WB.CLIENT_ID).eq('role_ref', roleId).is('deleted_at', null)
+    .select('id').maybeSingle();
+  if(up.error) throw up.error;
+  if(!up.data) throw new Error('That role has already been removed.');
+ }catch(e){ roleWriteFailed('remove this role', e && e.message); return; }
+ DB.audit(roleId,'Role removed from library','Role library',r.title+' — retained with its history; hidden from the library.');
+ await loadRoles(true);
+ renderLibrary();
+}
+
+function useRole(roleId){
+ if(!ROLE_CACHE){ loadRoles().then(()=>useRole(roleId)); return; }
+ const r = roleByRef(roleId); if(!r) return;
+ ASSESS_MODE='worker'; go('assess');
+ const ar=document.getElementById('aRole'); if(ar){ar.value=r.title+' (pre-filled from role library — confirm for this worker)';ar.readOnly=false;}
+ const aw=document.getElementById('aWorker'); if(aw){aw.value='';aw.readOnly=false;aw.style.display='';}
+ applyAnswers(r.answers, r.evidence||{});
+ PREFILL_SOURCE={roleId:r.roleId,title:r.title,lean:r.lean};
+ document.getElementById('assessResult').innerHTML='<div class="card"><h3><span class="dot"></span>Pre-filled from role library</h3><p class="small">Starting point: <b>'+esc(r.title)+'</b> — provisional lean <b>'+esc(r.lean)+'</b>.<br><br><b>This has not determined anything.</b> Confirm or correct each answer for this worker, and complete the four worker-only questions a role cannot answer — C1, C2 (contract context), M1 (business on own account) and M12 (worked here before) — then run the determination.</p></div>';
+}
+
+function renderLibrary(){
+ EDIT_ROLE_ID=null;
+ const grid=document.getElementById('libGrid');
+ if(!grid) return;
+ if(!ROLE_CACHE){
+  grid.innerHTML='<p class="small" style="grid-column:1/-1">Loading the role library…</p>';
+  loadRoles().then(renderLibrary);
+  return;
+ }
+ let sb=document.getElementById('libSearch');
+ if(!sb){const wrap=document.createElement('div');wrap.className='toolbar';wrap.style.marginBottom='12px';
+  wrap.innerHTML='<input id="libSearch" placeholder="Search roles — title, sector, engagement, ID or lean…" oninput="renderLibrary()" style="flex:1"><span class="chip" id="libCount"></span>';
+  grid.parentNode.insertBefore(wrap,grid);sb=document.getElementById('libSearch');
+ }
+ const q=(sb.value||'').toLowerCase();
+ let roles=rolesList();
+ if(q)roles=roles.filter(r=>((r.title+' '+r.sector+' '+r.engagement+' '+r.roleId+' '+r.lean).toLowerCase().includes(q)));
+ const cnt=document.getElementById('libCount');if(cnt)cnt.textContent=roles.length+' role'+(roles.length===1?'':'s');
+ const canEd=canEditRoles();
+ const errBox = ROLE_LOAD_ERR ? '<div class="gatebox" style="grid-column:1/-1">⚠ The role library could not be read from the secure store ('+esc(ROLE_LOAD_ERR)+'). What you see may be incomplete — reload before adding or editing anything.</div>' : '';
+ const addBtn=canEd?'<div style="grid-column:1/-1;margin-bottom:4px"><button class="btn" onclick="setAssessMode(\'role\');go(\'assess\')">+ Assess a new role</button></div>':'';
+ grid.innerHTML=errBox+addBtn+(roles.length?roles.map(e=>{
+  const st=e.office?'Inside':capOutcome(e.outcome);
+  return '<div class="libcard"><div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><span class="rt">'+esc(e.title)+'</span>'+pill(st)+'</div>'
+   +'<div class="why">'+esc(e.sector||'—')+(e.engagement&&e.engagement!=='—'?' · '+esc(e.engagement):'')+'</div>'
+   +'<div class="meta">'+esc(e.roleId)+' · provisional lean · '+(e.updated?'updated '+fmtDate(e.updated):'added '+fmtDate(e.date))+' by '+esc(e.by)+' · ruleset '+e.rs+'</div>'
+   +'<div class="foot"><span class="fresh">PROVISIONAL — not an SDS</span><span style="flex:1"></span>'
+   +(canEd?'<button class="btn tiny sec" onclick="editRole(\''+e.roleId+'\')">Edit</button><button class="btn tiny sec" onclick="deleteRole(\''+e.roleId+'\')">Delete</button>':'')
+   +'<button class="btn tiny" onclick="useRole(\''+e.roleId+'\')">Pre-fill a worker →</button></div>'
+  +'</div>';
+ }).join(''):'<p class="small" style="grid-column:1/-1">'+(q?'No roles match “'+esc(q)+'”.':'No roles in the library yet.'+(canEd?' Click <b>+ Assess a new role</b> to add one.':''))+'</p>');
+}
+
 </script></body></html>
