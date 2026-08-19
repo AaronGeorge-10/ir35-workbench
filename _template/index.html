@@ -67,6 +67,7 @@ window.WB={CLIENT_ID:'__CLIENT_ID__',TENANT_NAME:'__TENANT_NAME__',SUPABASE_URL:
   .chip{font-size:12px;color:var(--muted)}
   /* assessment */
   .q{padding:16px 0;border-bottom:1px solid var(--line)}
+  .quiz-client .resp-con{display:none}
   .q:last-child{border:none}
   .q .qt{font-weight:600;margin-bottom:4px}
   .q .qh{color:var(--muted);font-size:12px;margin-bottom:10px}
@@ -309,7 +310,7 @@ const RULESET=[
  {id:'c1_commenced',code:'C1',grp:'Engagement context',gc:'context',band:'context',
   t:'Has the contract, including any extensions, already commenced?',
   opts:[['No — not yet commenced',0,''],['Yes — commenced',0,'']]},
- {id:'c2_named',code:'C2',grp:'Engagement context',gc:'context',band:'context',
+ {id:'c2_named',code:'C2',grp:'Engagement context',gc:'context',band:'context',resp:'contractor',
   t:'Is the individual who will deliver the services personally named in the contract?',
   opts:[['No',0,''],['Yes',0,'']]},
  // -------- KEY 1: Personal service & substitution --------
@@ -364,7 +365,7 @@ const RULESET=[
   t:'Is there any obligation to offer and accept further work beyond that agreed for this engagement?',
   opts:[['No — no obligation either way',2,'good'],['Informal expectation only',0,''],['Yes — an obligation to offer and accept',-2,'risk']]},
  // -------- MINOR: Financial risk and business on own account --------
- {id:'m1_business',code:'M1',grp:'Financial risk and business on own account',gc:'minor',band:'minor',multi:true,featCount:6,
+ {id:'m1_business',code:'M1',grp:'Financial risk and business on own account',gc:'minor',band:'minor',multi:true,featCount:6,resp:'contractor',
   t:'Contractor-only question: Does the contractor operate as a business on its own account with any of the following business features? (select all that apply)',
   opts:[['Employees',0,'good'],['Other contracts or revenue streams',0,'good'],['Website',0,'good'],['Marketing',0,'good'],['Business office',0,'good'],['Business insurances',0,'good'],['None of these apply',0,'risk']]},
  {id:'m2_otherclients',code:'M2',grp:'Financial risk and business on own account',gc:'minor',band:'minor',
@@ -409,7 +410,13 @@ const KEY_MAX=30, MINOR_MAX=12;
 /* ============================== ENGINE ============================== */
 function scoreOf(q,ans){
  if(q.band==='context')return 0;
- if(q.multi){const arr=Array.isArray(ans)?ans:[];const feats=arr.filter(i=>i<q.featCount).length;return feats>=1?1:-1;}
+ /* Unanswered multi-select scores NEUTRAL, not -1. Before 19 Aug 2026 an empty
+    array fell through to -1, so a contractor-only question left blank by the
+    hirer silently docked a point. "None of these apply" (the sentinel) still
+    scores -1 because it is a real, given answer. */
+ if(q.multi){if(!Array.isArray(ans)||!ans.length)return 0;
+  const feats=ans.filter(i=>i<q.featCount).length;return feats>=1?1:-1;}
+ if(ans==null)return 0;
  const o=q.opts[ans];return o?o[1]:0;
 }
 function assess(answers){
@@ -610,11 +617,11 @@ function wireAssess(){
  const sel=document.getElementById('prefill');if(sel&&sel.options.length<=1){SEED_FULL.forEach(w=>{const o=document.createElement('option');o.value=w.ref;o.textContent=w.ref+' · '+w.role.split(' — ')[0];sel.appendChild(o);});}
  const c=document.getElementById('quiz');let last=null,h='';
  RULESET.forEach((q,i)=>{const gc=q.band==='minor'?'minor':q.band==='override'?'override':q.band==='context'?'minor':'';if(q.grp!==last){h+='<div class="grphead '+gc+'">'+q.grp+'</div>';last=q.grp;}
-  h+='<div class="q" id="q_'+q.id+'"><div class="qt">'+(q.code||(i+1))+'. '+q.t+'</div>'+(q.h?'<div class="qh"><b>Guidance:</b> '+q.h+'</div>':'')+'<div class="opts'+(q.multi?' multi':'')+'">';
+  h+='<div class="q'+(q.resp==='contractor'?' resp-con':'')+'" id="q_'+q.id+'"><div class="qt">'+(q.code||(i+1))+'. '+q.t+'</div>'+(q.h?'<div class="qh"><b>Guidance:</b> '+q.h+'</div>':'')+'<div class="opts'+(q.multi?' multi':'')+'">';
   const itype=q.multi?'checkbox':'radio';
   q.opts.forEach((o,oi)=>{h+='<label data-tone="'+o[2]+'"><input type="'+itype+'" name="'+q.id+'" value="'+oi+'" onchange="selOpt(this)"><span>'+o[0]+'</span></label>';});
   h+='</div><textarea class="qnote" id="note_'+q.id+'" placeholder="Notes / evidence (optional)"></textarea></div>';});
- c.innerHTML=h;updateProg();
+ c.innerHTML=h;respScopeApply();updateProg();
  document.getElementById('assessResult').innerHTML='<div class="card"><h3><span class="dot"></span>Result</h3><p class="small">Answer the questions and run the determination. Borderline outcomes never auto-issue an SDS — they route to the expert-review gate.</p></div>';
 }
 function selOpt(inp){
@@ -649,7 +656,7 @@ function runAssess(){
 }
 function mkWorker(ref,a,outcome){const w={tenantId:TENANT.id,ref,worker:a.worker,role:a.role,engagement:'Entered via live assessment',rate:0,bucket:'Other',insurance:{status:'Pending'},answers:a.answers,evidence:a.evidence,outcome,key:a.d.keyScore,minor:a.d.minorScore,total:a.d.total,office:a.d.office,status:capOutcome(outcome),assessedOn:NOW,sdsState:'None',nextReview:null,full:true};DB.s.workers.push(w);return w;}
 function commitSDS(){const a=lastA,ref=DB.nextId('AS'),w=mkWorker(ref,a,a.d.outcome);const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome:a.d.outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12)});w.sdsState='Issued';w.nextReview=addMonths(NOW,12);w.lastSDS=NOW;DB.audit(ref,'Assessment completed',(CURRENT_USER?CURRENT_USER.name:'Client')+' ('+RESP+' respondent)','Outcome '+capOutcome(a.d.outcome)+' · key '+sgn(a.d.keyScore)+' · total '+sgn(a.d.total));DB.audit(ref,'SDS issued','Ascend Workforce Solutions',sref+' — '+capOutcome(a.d.outcome)+(a.d.office?' (office-holder override)':''));renderNav();openSDS(ref);}
-function commitBorder(){const a=lastA,ref=DB.nextId('AS'),w=mkWorker(ref,a,'border');w.sdsState='Referred';DB.s.reviews.push({tenantId:TENANT.id,workerRef:ref,reason:'Borderline',raisedAt:NOW+' '+new Date().toTimeString().slice(0,5),assignedTo:'Orsted Head of Tax (internal senior reviewer)',status:'Awaiting internal review',slaDue:addDays(NOW,5),rulesetVersion:RULESET_VERSION,stage:1,decision:null,reasoning:''});DB.audit(ref,'Assessment completed',(CURRENT_USER?CURRENT_USER.name:'Client')+' ('+RESP+' respondent)','Outcome Borderline · key '+sgn(a.d.keyScore)+' · total '+sgn(a.d.total));DB.audit(ref,'Routed to expert review','Engine (borderline gate)','No SDS issued. SLA due '+addDays(NOW,5)+'.');renderNav();go('review');}
+function commitBorder(){const a=lastA,ref=DB.nextId('AS'),w=mkWorker(ref,a,'border');w.sdsState='Referred';DB.s.reviews.push({tenantId:TENANT.id,workerRef:ref,reason:'Borderline',raisedAt:NOW+' '+new Date().toTimeString().slice(0,5),assignedTo:'Orsted Head of Tax (internal senior reviewer)',status:'Awaiting internal review',slaDue:addDays(NOW,5),rulesetVersion:RULESET_VERSION,stage:1,decision:null,reasoning:''});DB.audit(ref,'Assessment completed',(CURRENT_USER?CURRENT_USER.name:'Client')+' ('+RESP+' respondent)','Outcome Borderline · key '+sgn(a.d.keyScore)+' · total '+sgn(a.d.total));DB.audit(ref,'Routed to expert review','Engine (borderline gate)','No SDS issued. SLA due '+addDays(NOW,5)+'.');if(a.outstanding&&a.outstanding.length){DB.audit(ref,'Contractor questions outstanding','Respondent scoping',a.outstanding.join(', ')+' — contractor-sourced, not answerable by the hirer. Scored neutral pending the contractor questionnaire.');}renderNav();go('review');}
 
 /* ============================== JD ANALYSER ============================== */
 const jdEmpty='<h3><span class="dot"></span>Analysis</h3><p class="small">Paste a job description and press Analyse. The tool extracts IR35 signals and suggests a lean — it never issues a determination.</p>';
@@ -910,7 +917,7 @@ function migrateReviews(){
  DB.save();
 }
 let RESP_LOCK=null;
-function setResp(r){if(RESP_LOCK&&r!==RESP_LOCK)return;RESP=(r==='contractor')?'contractor':'client';var c=document.getElementById('segClient'),o=document.getElementById('segCon');if(c)c.classList.toggle('active',RESP==='client');if(o)o.classList.toggle('active',RESP==='contractor');}
+function setResp(r){if(RESP_LOCK&&r!==RESP_LOCK)return;RESP=(r==='contractor')?'contractor':'client';var c=document.getElementById('segClient'),o=document.getElementById('segCon');if(c)c.classList.toggle('active',RESP==='client');if(o)o.classList.toggle('active',RESP==='contractor');respScopeApply();}
 function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=document.getElementById('segClient'),o=document.getElementById('segCon'),pf=document.getElementById('prefill');if(c)c.classList.toggle('disabled',lock==='contractor');if(o)o.classList.toggle('disabled',lock==='client');if(pf)pf.style.display=(lock==='contractor')?'none':'';}
 /* ===== Live boot: access-code gate → Ørsted Supabase (London) hydrate ===== */
 (function(){
@@ -1036,6 +1043,24 @@ let lastRole=null;
 let PREFILL_SOURCE=null;
 function currentRuleset(){return ASSESS_MODE==='role'?ROLE_RULESET:RULESET;}
 
+/* ===== RESPONDENT SCOPING (Aaron, 19 Aug 2026) =====
+   C2 (personally named in the contract) and M1 (business on own account) are
+   CONTRACTOR-ONLY. A line manager has not seen the contract - and where the
+   worker comes via an agency cannot know whether the individual is named - and
+   cannot know the contractor's own business features. Both are hidden from the
+   client-side questionnaire, are NOT required to run a determination, and score
+   neutral until the contractor supplies them.
+   Every other question is answered centrally at role-library level by the
+   Contingent Workforce Team and arrives pre-filled. */
+function respScopeApply(){var el=document.getElementById('quiz');
+ if(el)el.classList.toggle('quiz-client',ASSESS_MODE!=='role'&&RESP!=='contractor');}
+function activeQuestions(){var RS=currentRuleset();
+ if(ASSESS_MODE==='role'||RESP==='contractor')return RS;
+ return RS.filter(function(q){return q.resp!=='contractor';});}
+function outstandingContractorQs(){
+ if(ASSESS_MODE==='role'||RESP==='contractor')return [];
+ return currentRuleset().filter(function(q){return q.resp==='contractor';});}
+
 /* engine now takes a ruleset (defaults to the individual set) */
 function assess(answers,ruleset){
  let keyScore=0,minorScore=0,office=false,strengths=[],risks=[],items=[],flags=[];
@@ -1066,7 +1091,7 @@ function assess(answers,ruleset){
  return {rulesetVersion:RULESET_VERSION,keyScore,minorScore,total,office,outcome,title,msg,strengths,risks,items,flags,autoSDS:(outcome!=='border')};
 }
 
-function updateProg(){const RS=currentRuleset();const done=RS.filter(q=>document.querySelector('input[name="'+q.id+'"]:checked')).length;const e=document.getElementById('qprog');if(e)e.textContent=done+' / '+RS.length+' answered';}
+function updateProg(){const RS=activeQuestions();const done=RS.filter(q=>document.querySelector('input[name="'+q.id+'"]:checked')).length;const e=document.getElementById('qprog');if(e)e.textContent=done+' / '+RS.length+' answered';}
 
 function setAssessMode(m){ASSESS_MODE=m;PREFILL_SOURCE=null;wireAssess();}
 
@@ -1098,18 +1123,18 @@ function wireAssess(){
  const sel=document.getElementById('prefill');if(sel&&sel.options.length<=1){SEED_FULL.forEach(w=>{const o=document.createElement('option');o.value=w.ref;o.textContent=w.ref+' · '+w.role.split(' — ')[0];sel.appendChild(o);});}
  const c=document.getElementById('quiz');let lastg=null,h='';
  currentRuleset().forEach((q,i)=>{const gc=q.band==='minor'?'minor':q.band==='override'?'override':q.band==='context'?'minor':'';if(q.grp!==lastg){h+='<div class="grphead '+gc+'">'+q.grp+'</div>';lastg=q.grp;}
-  h+='<div class="q" id="q_'+q.id+'"><div class="qt">'+(q.code||(i+1))+'. '+q.t+'</div>'+(q.h?'<div class="qh"><b>Guidance:</b> '+q.h+'</div>':'')+'<div class="opts'+(q.multi?' multi':'')+'">';
+  h+='<div class="q'+(q.resp==='contractor'?' resp-con':'')+'" id="q_'+q.id+'"><div class="qt">'+(q.code||(i+1))+'. '+q.t+'</div>'+(q.h?'<div class="qh"><b>Guidance:</b> '+q.h+'</div>':'')+'<div class="opts'+(q.multi?' multi':'')+'">';
   const itype=q.multi?'checkbox':'radio';
   q.opts.forEach((o,oi)=>{h+='<label data-tone="'+o[2]+'"><input type="'+itype+'" name="'+q.id+'" value="'+oi+'" onchange="selOpt(this)"><span>'+o[0]+'</span></label>';});
   h+='</div><textarea class="qnote" id="note_'+q.id+'" placeholder="Notes / evidence (optional)"></textarea></div>';});
- c.innerHTML=h;updateProg();
+ c.innerHTML=h;respScopeApply();updateProg();
  document.getElementById('assessResult').innerHTML= roleM
   ? '<div class="card"><h3><span class="dot"></span>Provisional lean</h3><p class="small">Answer for the role <b>as typically engaged</b>. A role produces a <b>provisional lean only</b> — never an SDS. Saving it adds the role to the library, where it can pre-fill a per-worker assessment.</p></div>'
   : '<div class="card"><h3><span class="dot"></span>Result</h3><p class="small">Answer the questions and run the determination. Borderline outcomes never auto-issue an SDS — they route to the expert-review gate.</p></div>';
 }
 
 function runAssess(){
- const RS=currentRuleset();
+ const RS=activeQuestions();
  const answers={},evidence={};
  for(const q of RS){const checked=[...document.querySelectorAll('input[name="'+q.id+'"]:checked')];if(!checked.length){alert('Please answer every question — a complete record is part of reasonable care.');document.getElementById('q_'+q.id).scrollIntoView({behavior:'smooth',block:'center'});return;}answers[q.id]=q.multi?checked.map(c=>parseInt(c.value)):parseInt(checked[0].value);const nt=document.getElementById('note_'+q.id);if(nt&&nt.value.trim())evidence[q.id]=nt.value.trim();}
  const d=assess(answers,RS);
@@ -1117,10 +1142,12 @@ function runAssess(){
  const worker=(document.getElementById('aWorker').value||'').trim()||'[Worker / PSC]';const role=(document.getElementById('aRole').value||'').trim()||'[Role / assignment]';
  let divergence=null;
  if(PREFILL_SOURCE){const wl=d.office?'Inside':capOutcome(d.outcome);if(wl!==PREFILL_SOURCE.lean)divergence={role:PREFILL_SOURCE.title,roleLean:PREFILL_SOURCE.lean,workerLean:wl};}
- lastA={worker,role,answers,evidence,d,divergence,prefillRole:PREFILL_SOURCE?PREFILL_SOURCE.title:null};
+ lastA={worker,role,answers,evidence,d,divergence,prefillRole:PREFILL_SOURCE?PREFILL_SOURCE.title:null,outstanding:outstandingContractorQs().map(function(q){return q.code;})};
  let h='<div class="result show '+d.outcome+'"><h3>'+d.title+'</h3><div class="score">'+(d.office?'Office-holder override — scoring not determinative':'Key '+sgn(d.keyScore)+' / 30 · Minor '+sgn(d.minorScore)+' / 12 · Combined '+sgn(d.total))+'</div>';
  h+='<p style="font-size:13px">'+d.msg+'</p>';
  if(divergence){h+='<div class="gatebox" style="background:#fff7e6;border-color:#f0c36d;color:#7a5b00">⚠ <b>Diverges from the role library.</b> Role “'+esc(divergence.role)+'” leans <b>'+esc(divergence.roleLean)+'</b>, but this worker assessed <b>'+esc(divergence.workerLean)+'</b>. The divergence is recorded for the varied-group consistency check.</div>';}
+ const _out=outstandingContractorQs();
+ if(_out.length){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">&#8505; <b>Awaiting the contractor.</b> '+_out.map(function(q){return q.code;}).join(' and ')+' '+(_out.length>1?'are':'is')+' answered by the contractor, not the hirer. '+(_out.length>1?'They score':'It scores')+' neutral until supplied, and '+(_out.length>1?'the answers are':'the answer is')+' recorded against this assessment when the contractor completes their questionnaire.</div>';}
  if(!d.office&&d.strengths.length){h+='<p class="small" style="margin-top:8px"><b>Pointing outside</b></p><ul>'+d.strengths.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
  if(!d.office&&d.risks.length){h+='<p class="small" style="margin-top:8px"><b>Pointing inside</b></p><ul>'+d.risks.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
  if(CURRENT_USER&&CURRENT_USER.role==='contractor'){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">Your responses have been recorded and submitted to the client for the determination. As the contractor, you do not issue your own SDS.</div>';}else if(d.outcome==='border'){h+='<div class="gatebox">⛔ No SDS issued. This case is gated — it routes to a qualified IR35 reviewer for sign-off before any statement can be released.</div><div style="margin-top:12px"><button class="btn" onclick="commitBorder()">Send to expert-review queue →</button></div>';}
@@ -1185,7 +1212,7 @@ function renderLibrary(){ensureRoles();
  }).join(''):'<p class="small" style="grid-column:1/-1">No roles in the library yet. Click <b>+ Assess a new role</b> to add one.</p>');
 }
 
-function commitSDS(){const a=lastA,ref=DB.nextId('AS'),w=mkWorker(ref,a,a.d.outcome);const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome:a.d.outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12)});w.sdsState='Issued';w.nextReview=addMonths(NOW,12);w.lastSDS=NOW;DB.audit(ref,'Assessment completed',(CURRENT_USER?CURRENT_USER.name:'Client')+' ('+RESP+' respondent)','Outcome '+capOutcome(a.d.outcome)+' · key '+sgn(a.d.keyScore)+' · total '+sgn(a.d.total));if(a.prefillRole){DB.audit(ref,'Pre-filled from role library','Role library','Source role: '+a.prefillRole+(a.divergence?' — DIVERGED (role '+a.divergence.roleLean+' → worker '+a.divergence.workerLean+')':' — consistent'));}DB.audit(ref,'SDS issued','Ascend Workforce Solutions',sref+' — '+capOutcome(a.d.outcome)+(a.d.office?' (office-holder override)':''));PREFILL_SOURCE=null;renderNav();openSDS(ref);}
+function commitSDS(){const a=lastA,ref=DB.nextId('AS'),w=mkWorker(ref,a,a.d.outcome);const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome:a.d.outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12)});w.sdsState='Issued';w.nextReview=addMonths(NOW,12);w.lastSDS=NOW;DB.audit(ref,'Assessment completed',(CURRENT_USER?CURRENT_USER.name:'Client')+' ('+RESP+' respondent)','Outcome '+capOutcome(a.d.outcome)+' · key '+sgn(a.d.keyScore)+' · total '+sgn(a.d.total));if(a.prefillRole){DB.audit(ref,'Pre-filled from role library','Role library','Source role: '+a.prefillRole+(a.divergence?' — DIVERGED (role '+a.divergence.roleLean+' → worker '+a.divergence.workerLean+')':' — consistent'));}if(a.outstanding&&a.outstanding.length){DB.audit(ref,'Contractor questions outstanding','Respondent scoping',a.outstanding.join(', ')+' — contractor-sourced, not answerable by the hirer. Scored neutral pending the contractor questionnaire.');}DB.audit(ref,'SDS issued','Ascend Workforce Solutions',sref+' — '+capOutcome(a.d.outcome)+(a.d.office?' (office-holder override)':''));PREFILL_SOURCE=null;renderNav();openSDS(ref);}
 
 
 /* ===== Role library — edit / delete / search / real dates (v0.3-role.1) ===== */
