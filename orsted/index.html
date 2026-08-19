@@ -462,6 +462,12 @@ function esc(t){return (t==null?'':String(t)).replace(/&/g,'&amp;').replace(/</g
 /* ============================== SEED ============================== */
 const NOW=(function(){try{return new Date().toISOString().slice(0,10);}catch(e){return '2026-06-11';}})();
 const TENANT={id:(window.WB&&WB.CLIENT_ID)||'orsted',name:(window.WB&&WB.TENANT_NAME)||'Orsted',sector:'Renewable energy',cadence:12};
+/* Sample/demo data removed 2026-08-19 (Aaron). SEED_FULL, SEED_DISPLAY and
+   the role-library sample list held invented worker and role records, and
+   example library roles. The controls that surfaced them had already been taken
+   out of the markup and their renderers overridden, so nothing rendered - but the
+   data and its consumers were still here to be wired back up by accident. Deleted
+   outright. A live tenant must never see invented worker records. */
 const PAT={
  out:{o1_office:0,c1_commenced:1,c2_named:1,k1_subright:0,k2_subrefuse:0,k3_subpay:0,k4_subpractice:0,k5_methods:0,k6_policies:0,k7_linemgmt:0,k8_when:0,k9_timeoff:0,k10_refuse:0,k11_location:1,k12_nopay:0,k13_sickpay:0,k14_project:0,k15_furtherwork:0,m1_business:[0,1,2,3,4,5],m2_otherclients:0,m3_majoritytime:0,m4_costs:0,m5_rectify:0,m6_equip:0,m7_pay:0,m8_benefits:0,m9_presented:0,m10_linemanage:0,m11_sameskills:0,m12_workedbefore:0},
  in:{o1_office:0,c1_commenced:1,c2_named:1,k1_subright:2,k2_subrefuse:2,k3_subpay:2,k4_subpractice:2,k5_methods:2,k6_policies:2,k7_linemgmt:2,k8_when:2,k9_timeoff:2,k10_refuse:2,k11_location:2,k12_nopay:2,k13_sickpay:2,k14_project:2,k15_furtherwork:2,m1_business:[6],m2_otherclients:2,m3_majoritytime:2,m4_costs:2,m5_rectify:2,m6_equip:2,m7_pay:2,m8_benefits:2,m9_presented:2,m10_linemanage:2,m11_sameskills:2,m12_workedbefore:1},
@@ -469,34 +475,8 @@ const PAT={
  office:{o1_office:1,c1_commenced:1,c2_named:1,k1_subright:0,k2_subrefuse:0,k3_subpay:0,k4_subpractice:0,k5_methods:0,k6_policies:0,k7_linemgmt:0,k8_when:0,k9_timeoff:0,k10_refuse:0,k11_location:1,k12_nopay:0,k13_sickpay:0,k14_project:0,k15_furtherwork:0,m1_business:[0,1,2,3,4,5],m2_otherclients:0,m3_majoritytime:0,m4_costs:0,m5_rectify:0,m6_equip:0,m7_pay:0,m8_benefits:0,m9_presented:0,m10_linemanage:0,m11_sameskills:0,m12_workedbefore:0}
 };
 // 4 fully-assessed representative roles (live engine) + evidence
-const SEED_FULL=[
- {ref:'AS-2331',worker:'Worker A / Contractor PSC Ltd',role:'Geotechnical Engineer — offshore wind site investigation',engagement:'Fixed deliverable, ~14 weeks',rate:575,bucket:'Site investigation',insurance:{status:'Covered',provider:'Kingsbridge',product:'Off-Payroll Protect',tax:100000,fees:100000,payer:'End-hirer',premium:12.5},answers:PAT.out,evidence:{k4_subpractice:'A qualified substitute was proposed on a prior phase and accepted by the client.',k12_nopay:'Paid on delivery of the report milestone; no retainer.'},lastSDS:'2025-07-28',nextReview:'2026-07-28'},
- {ref:'AS-2332',worker:'Worker B / Contractor PSC Ltd',role:'Project Coordinator — embedded in client construction PMO',engagement:'Rolling monthly, 11 months, full-time on site',rate:450,bucket:'PMO / controls',insurance:{status:'Pending'},answers:PAT.in,evidence:{k7_linemgmt:'Reports daily to the client PM; tasks allocated through the client PMO tooling.'},lastSDS:'2025-06-20',nextReview:'2026-06-20'},
- {ref:'AS-2333',worker:'Worker C / Contractor PSC Ltd',role:'M&E Commissioning Engineer — property fit-out programme',engagement:'6-month assignment, mix of site and remote',rate:500,bucket:'Commissioning',insurance:{status:'Pending'},answers:PAT.border,evidence:{k2_subrefuse:'Substitution clause exists but requires client approval and is untested — flagged for review.',k11_location:'Core site attendance on commissioning days; balance remote. Not security-driven.'}},
- {ref:'AS-2334',worker:'Worker D / Contractor PSC Ltd',role:'Interim Finance Director (statutory director)',engagement:'9-month interim, board-level',rate:800,bucket:'Other',insurance:{status:'Not covered'},answers:PAT.office,evidence:{o1_office:'Registered as a statutory director at Companies House for the interim.'},lastSDS:'2026-03-11',nextReview:'2027-03-11'}
-];
 // display workforce (status assigned) — backdrop volume; SDS uses representative reasons
-const SEED_DISPLAY=[
- ['AS-2318','Worker E / Contractor PSC Ltd','HV Cable Engineer — export cable','Defined SOW, fixed-price',690,'Outside','Install / marine / cable','Covered','2026-06-05'],
- ['AS-2305','Worker F / Contractor PSC Ltd','Marine Coordinator — install vessels','Project, ~5 months',520,'Outside','Install / marine / cable','Covered','2026-08-12'],
- ['AS-2279','Worker G / Contractor PSC Ltd','Package Manager — WTG','Turbine package, milestone-based',780,'Outside','PMO / controls','Covered','2026-09-03'],
- ['AS-2270','Worker H / Contractor PSC Ltd','Commissioning Engineer — OSS','Defined commissioning scope',595,'Outside','Commissioning','Covered','2026-07-02'],
- ['AS-2255','Worker I / Contractor PSC Ltd','Health & Safety Advisor — construction','Project advisory',505,'Outside','Other','Covered','2026-10-19'],
- ['AS-2329','Worker J / Contractor PSC Ltd','Wind Turbine Technician — O&M campaign','Ongoing O&M, client-directed',430,'Inside','Other','Pending','2026-06-15'],
- ['AS-2298','Worker K / Contractor PSC Ltd','QA / QC Inspector — foundations','Embedded, client-directed',470,'Inside','Site investigation','Pending','2026-05-28'],
- ['AS-2322','Worker L / Contractor PSC Ltd','Project Controls Lead — WTG foundations','Mixed; some client direction',640,'Borderline','PMO / controls','Pending',null],
- ['AS-2311','Worker M / Contractor PSC Ltd','SCADA Engineer — OSS commissioning','Mixed site/remote',580,'Borderline','Commissioning','Pending',null],
- ['AS-2261','Worker N / Contractor PSC Ltd','Environmental Advisor — consents','Awaiting assessment',540,'Pending','Other','Pending',null]
-];
 // pre-assessed role library (addendum 19) — pre-fills, never determines
-const ROLE_LIBRARY=[
- {title:'Offshore wind geotechnical engineer (fixed deliverable)',status:'Outside',pattern:'out',why:'Defined site-investigation deliverable on a fixed-price SOW, own methods/equipment, genuine substitution, no MoO once delivered.',by:'A. George',date:'2026-03-02',rs:'v0.3',stale:false},
- {title:'Embedded PMO project coordinator (ongoing)',status:'Inside',pattern:'in',why:'Full-time embedded in the client PMO, client-directed, continuous work, paid in downtime — disguised employment pattern.',by:'A. George',date:'2026-03-02',rs:'v0.3',stale:false},
- {title:'Interim director / office-holder',status:'Inside',pattern:'office',why:'Statutory office-holder of the client — automatically inside IR35 by the office-holder rule, regardless of working practices.',by:'A. George',date:'2026-03-02',rs:'v0.3',stale:false},
- {title:'HV cable engineer (fixed-price SOW)',status:'Outside',pattern:'out',why:'Engaged for a defined export-cable package on milestone payments; own equipment; project-tied with no rolling obligation.',by:'A. George',date:'2026-03-02',rs:'v0.3',stale:false},
- {title:'M&E / SCADA commissioning engineer (mixed)',status:'Mixed',pattern:'border',why:'Commissioning roles frequently sit borderline — fettered substitution and programme-driven site attendance. Expect the expert gate.',by:'A. George',date:'2026-03-02',rs:'v0.3',stale:false},
- {title:'Document controller (PMO)',status:'Inside',pattern:'in',why:'Process role fully integrated into the client team on client systems; little business-on-own-account. Assessed under the prior ruleset.',by:'A. George',date:'2025-11-14',rs:'v0.1',stale:true}
-];
 /* JD analyser model (ported from demo) */
 const JD_SIGNALS={in:[['report to','Reports into a line manager (control)'],['line manager','Line-managed like an employee (control)'],['fixed hours','Set, fixed working hours (control)'],['full-time','Full-time, ongoing commitment (mutuality)'],['ongoing','Ongoing, open-ended work (mutuality)'],['open-ended','Open-ended engagement (mutuality)'],['permanent','Permanent-style role (mutuality)'],['company equipment','Uses client-provided equipment (minor)'],['company laptop','Uses client-provided equipment (minor)'],['manage a','Manages client staff (part and parcel)'],['team meetings','Attends internal team meetings (part and parcel)'],['appraisal','Subject to performance appraisals (part and parcel)'],['holiday','Employee-type benefits referenced (minor)'],['on-site','Required to work on client site (control)'],['must work','Mandated working pattern (control)']],out:[['deliverable','Engaged for a defined deliverable (mutuality)'],['statement of work','SOW-based engagement (mutuality)'],['fixed-price','Fixed-price basis (financial risk / payment)'],['fixed price','Fixed-price basis (financial risk / payment)'],['milestone','Milestone-based payment (payment)'],['project','Defined project scope (mutuality)'],['own equipment','Uses their own equipment (minor)'],['own methods','Controls their own working methods (control)'],['substitut','Right of substitution referenced (key)'],['no obligation','No mutuality of obligation stated (key)'],['specialist','Specialist engaged for a specific need (part and parcel)'],['outside ir35','Pre-positioned as outside IR35 (verify carefully)']]};
 const JD_SAMPLES={out:"We require a specialist geotechnical consultant to deliver a defined site-investigation report against a fixed-price statement of work. The consultant will use their own equipment and own methods, may send a suitably qualified substitute, and is engaged for the duration of the project only, with no obligation on either side to provide or accept further work once the deliverable is complete.",in:"Full-time SCADA engineer to report to the Commissioning Manager, working fixed hours on-site using company equipment. The role is ongoing and open-ended, includes attendance at daily team meetings and annual appraisals, holiday entitlement, and the post-holder will manage a small team of technicians as part of the client organisation."};
@@ -521,31 +501,13 @@ const DB={
  audits(){return this.s.audit.filter(a=>a.tenantId===TENANT.id);},
  disputes(){return this.s.disputes.filter(d=>d.tenantId===TENANT.id);},
  seed(){
-  const s={seq:0,workers:[],sds:[],reviews:[],audit:[],disputes:[],roles:[]};this.s=s;this.mem=s;return s;let n=0;
-  const issue=(w,outcome,review,last)=>{const sref='SDS-'+w.ref.replace('AS-','');s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:w.ref,outcome,issuedOn:last||NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:review});w.sdsState='Issued';w.lastSDS=last||NOW;w.nextReview=review;};
-  // full (live engine)
-  for(const f of SEED_FULL){
-   const d=assess(f.answers);
-   const w={tenantId:TENANT.id,ref:f.ref,worker:f.worker,role:f.role,engagement:f.engagement,rate:f.rate,bucket:f.bucket,insurance:f.insurance,answers:f.answers,evidence:f.evidence||{},outcome:d.outcome,key:d.keyScore,minor:d.minorScore,total:d.total,office:d.office,status:capOutcome(d.outcome),assessedOn:NOW,sdsState:'None',nextReview:f.nextReview||null,full:true};
-   s.workers.push(w);
-   s.audit.unshift({tenantId:TENANT.id,entity:f.ref,type:'Assessment completed',actor:'Demo seed (client respondent)',when:NOW+' 09:'+String(10+n).padStart(2,'0'),detail:'Outcome '+capOutcome(d.outcome)+' · key '+sgn(d.keyScore)+'/30 · total '+sgn(d.total)});
-   if(d.outcome==='border'){w.sdsState='Referred';s.reviews.push({tenantId:TENANT.id,workerRef:f.ref,reason:'Borderline',raisedAt:NOW+' 09:'+String(11+n).padStart(2,'0'),assignedTo:'Bauer & Cottrell (external adviser)',status:'Awaiting review',slaDue:addDays(NOW,5),rulesetVersion:RULESET_VERSION,decision:null,reasoning:''});s.audit.unshift({tenantId:TENANT.id,entity:f.ref,type:'Routed to expert review',actor:'Engine (borderline gate)',when:NOW+' 09:'+String(11+n).padStart(2,'0'),detail:'No SDS issued. Awaiting qualified sign-off. SLA due '+addDays(NOW,5)+'.'});}
-   else{issue(w,d.outcome,f.nextReview||addMonths(NOW,12),f.lastSDS);s.audit.unshift({tenantId:TENANT.id,entity:f.ref,type:'SDS issued',actor:'Ascend Workforce Solutions',when:NOW+' 09:'+String(12+n).padStart(2,'0'),detail:'SDS-'+f.ref.replace('AS-','')+' — '+capOutcome(d.outcome)+(d.office?' (office-holder override)':'')});}
-   n++;
-  }
-  // display (status given)
-  for(const r of SEED_DISPLAY){
-   const [ref,worker,role,engagement,rate,status,bucket,ins,next]=r;
-   const outcome=clsOf(status);
-   const w={tenantId:TENANT.id,ref,worker,role,engagement,rate,bucket,insurance:{status:ins},answers:null,evidence:{},outcome,status,assessedOn:NOW,sdsState:'None',nextReview:next,full:false};
-   s.workers.push(w);
-   if(status==='Borderline'){w.sdsState='Referred';s.reviews.push({tenantId:TENANT.id,workerRef:ref,reason:'Borderline',raisedAt:'2026-06-09 14:20',assignedTo:'Bauer & Cottrell (external adviser)',status:'Awaiting review',slaDue:addDays(NOW,3),rulesetVersion:RULESET_VERSION,decision:null,reasoning:''});}
-   else if(status!=='Pending'){issue(w,outcome,next||addMonths(NOW,12),next?addMonths(next,-12):null);}
-  }
-  // a few historical audit + disputes for realism
-  [['AS-2230','Status changed Inside → Outside (substitution evidenced)','IR35 reviewer','2026-06-08 11:03'],['AS-2244','SDS issued — Outside','Ascend Workforce Solutions','2026-06-08 16:12'],['AS-2210','Dispute opened by worker','Worker','2026-06-07 15:48']].forEach(e=>s.audit.push({tenantId:TENANT.id,entity:e[0],type:e[1],actor:e[2],when:e[3],detail:''}));
-  s.disputes=[{tenantId:TENANT.id,ref:'AS-2210',role:'Wind Turbine Technician',raised:'2026-06-02',status:'In review'},{tenantId:TENANT.id,ref:'AS-2185',role:'HV Cable Engineer',raised:'2026-05-28',status:'SLA breach'},{tenantId:TENANT.id,ref:'AS-2151',role:'Document Controller',raised:'2026-05-19',status:'Awaiting worker'}];
-  return s;
+  /* A new tenant starts EMPTY. 2026-08-19: the unreachable demo-fixture body that
+     used to sit after this return (4 example workers + their SDSs, reviews, audit
+     lines and disputes) has been deleted outright. A previous session had already
+     killed it with an early return; the code is now gone so a refactor cannot bring
+     fake worker records back into a real client's live register. Sample data belongs
+     in the sales demo build, never in a tenant store. */
+  const s={seq:0,workers:[],sds:[],reviews:[],audit:[],disputes:[],roles:[]};this.s=s;this.mem=s;return s;
  }
 };
 /* ============================== NAV / ROUTER ============================== */
@@ -614,7 +576,6 @@ function renderRegister(){
 let RESP='client';
 function setResp(r){RESP=r;document.getElementById('segClient').classList.toggle('active',r==='client');document.getElementById('segCon').classList.toggle('active',r==='contractor');}
 function wireAssess(){
- const sel=document.getElementById('prefill');if(sel&&sel.options.length<=1){SEED_FULL.forEach(w=>{const o=document.createElement('option');o.value=w.ref;o.textContent=w.ref+' · '+w.role.split(' — ')[0];sel.appendChild(o);});}
  const c=document.getElementById('quiz');let last=null,h='';
  RULESET.forEach((q,i)=>{const gc=q.band==='minor'?'minor':q.band==='override'?'override':q.band==='context'?'minor':'';if(q.grp!==last){h+='<div class="grphead '+gc+'">'+q.grp+'</div>';last=q.grp;}
   h+='<div class="q'+(q.resp==='contractor'?' resp-con':'')+'" id="q_'+q.id+'"><div class="qt">'+(q.code||(i+1))+'. '+q.t+'</div>'+(q.h?'<div class="qh"><b>Guidance:</b> '+q.h+'</div>':'')+'<div class="opts'+(q.multi?' multi':'')+'">';
@@ -634,7 +595,7 @@ function selOpt(inp){
  }
  opts.querySelectorAll('label').forEach(l=>l.classList.remove('sel','sel-risk'));const lab=inp.closest('label');lab.classList.add(lab.dataset.tone==='risk'?'sel-risk':'sel');updateProg();}
 function updateProg(){const done=RULESET.filter(q=>document.querySelector('input[name="'+q.id+'"]:checked')).length;const e=document.getElementById('qprog');if(e)e.textContent=done+' / '+RULESET.length+' answered';}
-function prefillExample(ref){if(!ref)return;const w=SEED_FULL.find(x=>x.ref===ref);if(!w)return;document.getElementById('aWorker').value=w.worker;document.getElementById('aRole').value=w.role;applyAnswers(w.answers,w.evidence);}
+
 function applyAnswers(ans,ev){RULESET.forEach(q=>{const v=ans[q.id];
  if(q.multi){const arr=Array.isArray(v)?v:[];document.querySelectorAll('input[name="'+q.id+'"]').forEach((b,i)=>{b.checked=arr.includes(i);const l=b.closest('label');l.classList.remove('sel','sel-risk');if(b.checked)l.classList.add(l.dataset.tone==='risk'?'sel-risk':'sel');});}
  else{const r=document.querySelector('input[name="'+q.id+'"][value="'+v+'"]');if(r){r.checked=true;selOpt(r);}}
@@ -649,7 +610,7 @@ function runAssess(){
  h+='<p style="font-size:13px">'+d.msg+'</p>';
  if(!d.office&&d.strengths.length){h+='<p class="small" style="margin-top:8px"><b>Pointing outside</b></p><ul>'+d.strengths.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
  if(!d.office&&d.risks.length){h+='<p class="small" style="margin-top:8px"><b>Pointing inside</b></p><ul>'+d.risks.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
- if(CURRENT_USER&&CURRENT_USER.role==='contractor'){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">Your responses have been recorded and submitted to the client for the determination. As the contractor, you do not issue your own SDS.</div>';}else if(d.outcome==='border'){h+='<div class="gatebox">⛔ No SDS issued. This case is gated — it routes to a qualified IR35 reviewer for sign-off before any statement can be released.</div><div style="margin-top:12px"><button class="btn" onclick="commitBorder()">Send to expert-review queue →</button></div>';}
+ if(CURRENT_USER&&CURRENT_USER.role==='contractor'){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">As the contractor you do not issue your own SDS. Submitting sends your answers to the end-hirer; only the contractor-only questions ('+esc(contractorCodes())+') feed the determination \u2014 the rest is kept as supporting context.</div>'+'<div style="margin-top:12px"><button class="btn" onclick="commitContractorSubmission()">Submit my answers to the end-hirer \u2192</button></div>';}else if(d.outcome==='border'){h+='<div class="gatebox">⛔ No SDS issued. This case is gated — it routes to a qualified IR35 reviewer for sign-off before any statement can be released.</div><div style="margin-top:12px"><button class="btn" onclick="commitBorder()">Send to expert-review queue →</button></div>';}
  else{h+='<div style="margin-top:12px"><button class="btn" onclick="commitSDS()">Generate SDS &amp; add to register →</button></div>';}
  h+='</div>';
  document.getElementById('assessResult').innerHTML=h;
@@ -677,18 +638,6 @@ function analyseJD(){
 }
 function jdToAssessment(){go('assess');document.getElementById('aRole').value='From JD analyser — confirm against actual engagement';}
 
-/* ============================== ROLE LIBRARY ============================== */
-function renderLibrary(){
- document.getElementById('libGrid').innerHTML=ROLE_LIBRARY.map((e,i)=>{
-  const pc={Outside:'p-out',Inside:'p-in',Mixed:'p-border'}[e.status];
-  return '<div class="libcard"><div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><span class="rt">'+esc(e.title)+'</span>'+pill(e.status==='Mixed'?'Borderline':e.status)+'</div>'+
-   '<div class="why">'+esc(e.why)+'</div>'+
-   '<div class="meta">Assessed '+fmtDate(e.date)+' by '+esc(e.by)+' · ruleset '+e.rs+'</div>'+
-   '<div class="foot">'+(e.stale?'<span class="stale">STALE — re-review</span>':'<span class="fresh">CURRENT</span>')+'<span style="flex:1"></span><button class="btn tiny" onclick="useLibrary('+i+')">Use to pre-fill →</button></div>'+
-  '</div>';
- }).join('');
-}
-function useLibrary(i){const e=ROLE_LIBRARY[i];go('assess');document.getElementById('aRole').value=e.title+' (pre-filled from library — confirm against this worker)';applyAnswers(PAT[e.pattern],{});document.getElementById('assessResult').innerHTML='<div class="card"><h3><span class="dot"></span>Pre-filled from role library</h3><p class="small">Starting point: <b>'+esc(e.title)+'</b> — provisionally '+esc(e.status)+'. '+esc(e.why)+'<br><br><b>This has not determined anything.</b> Confirm or correct each answer against this worker’s actual engagement, then run the determination.</p></div>';}
 
 /* ============================== REVIEW QUEUE ============================== */
 function renderReview(){
@@ -696,7 +645,9 @@ function renderReview(){
  let h='';if(!open.length)h+='<div class="card"><p class="small">No items awaiting review.</p></div>';
  open.forEach(r=>{const w=DB.worker(r.workerRef);h+='<div class="reviewcard"><h3 style="display:flex;align-items:center;gap:8px;font-size:14px"><span class="dot"></span>'+r.workerRef+' — '+esc(w?w.role:'')+' '+pill('Borderline')+'</h3>'+
    '<div class="small" style="margin:6px 0">Raised '+r.raisedAt+' · assigned to <b>'+esc(r.assignedTo)+'</b> · SLA due <b>'+r.slaDue+'</b> · ruleset '+r.rulesetVersion+'</div>'+
-   '<div class="callout"><b>Engine lean:</b> Borderline'+(w&&w.full?' — key '+sgn(w.key)+' / 30, total '+sgn(w.total)+'. The key tests are not clearly positive, so the engine declined to determine.':' — mixed indicators across the key tests.')+'</div>'+
+   (r.reason&&r.reason!=='Borderline'
+    ? '<div class="callout" style="border-left-color:#c9860a"><b>Why this is here:</b> '+esc(r.reason)+'. Recomputed key '+sgn(w?w.key:0)+' / 30, total '+sgn(w?w.total:0)+' \u2014 now '+esc(capOutcome(w?w.outcome:'border'))+'. The contractor supplied '+esc(contractorCodes())+'; the hirer\u2019s own answers are unchanged. Any statement already issued is held pending your sign-off.</div>'
+    : '<div class="callout"><b>Engine lean:</b> Borderline'+(w&&w.full?' — key '+sgn(w.key)+' / 30, total '+sgn(w.total)+'. The key tests are not clearly positive, so the engine declined to determine.':' — mixed indicators across the key tests.')+'</div>')+
    evidenceList(w)+
    '<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px"><div class="small" style="font-weight:700;margin-bottom:6px">Reviewer decision (qualified IR35 specialist)</div>'+
    '<select id="dec_'+r.workerRef+'" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"><option value="">Select decision…</option><option>Outside</option><option>Inside</option><option>Needs more info</option></select>'+
@@ -859,7 +810,7 @@ function renderMine(){
  if(sds){h+='<p style="font-size:14px">Your status determination is '+pill(w.status)+'.</p><div style="margin-top:10px"><button class="btn" onclick="openSDS(\''+u.workerRef+'\')">View my Status Determination Statement →</button></div><p class="note">If you disagree, you may make representations to the end-hirer, who will respond within 45 days.</p>';}
  else if(rev){h+='<p class="small">Your assessment is <b>with a qualified reviewer</b> (borderline) — no determination has been issued yet.</p>';}
  else{h+='<p class="small">No determination issued yet.</p>';}
- h+='</div><div class="card" style="margin-top:14px"><h3><span class="dot"></span>Your questionnaire</h3><p class="small">Complete or update your side of the status questionnaire. Your answers are submitted to the client for the determination — you do not issue your own SDS.</p><div style="margin-top:10px"><button class="btn sec" onclick="go(\'assess\')">Open my questionnaire →</button></div></div>';
+ h+='</div><div class="card" style="margin-top:14px"><h3><span class="dot"></span>Your questionnaire</h3>'+(hasContractorInput(w)?'<p class="small">Submitted <b>'+esc(w.contractorSubmittedOn)+'</b>. Your answers to <b>'+esc(contractorCodes())+'</b> are merged into the end-hirer\u2019s assessment. You can resubmit if anything has changed \u2014 it is re-merged and re-audited.</p>':'<div class="gatebox">Your answers to <b>'+esc(contractorCodes())+'</b> have not been received yet. The end-hirer cannot answer these \u2014 they score neutral until you complete them.</div>')+'<p class="small">You do not issue your own SDS; the determination is the end-hirer\u2019s.</p><div style="margin-top:10px"><button class="btn sec" onclick="go(\'assess\')">'+(hasContractorInput(w)?'Review or update my answers':'Open my questionnaire')+' →</button></div></div>';
  document.getElementById('mine').innerHTML=h;
 }
 
@@ -872,9 +823,11 @@ function renderReview(){
  let h='<div class="callout" style="margin-bottom:14px"><b>Two-stage gate.</b> A borderline case goes first to an <b>internal senior reviewer</b> (Stage 1), who can approve and release the SDS or escalate to the <b>external legal/tax expert</b> (Stage 2). No borderline case becomes an SDS without a signed-off decision and reasoning at one of these stages — enforced in the data model.</div>';
  if(!open.length)h+='<div class="card"><p class="small">No items awaiting review.</p></div>';
  open.forEach(r=>{const w=DB.worker(r.workerRef);const canAct=canActStage(role,r.stage||1);
-  h+='<div class="reviewcard"><h3 style="display:flex;align-items:center;gap:8px;font-size:14px"><span class="dot"></span>'+r.workerRef+' — '+esc(w?w.role:'')+' '+pill('Borderline')+' <span class="rev-pill '+(r.stage===2?'rev-soon':'rev-over')+'">'+stageLabel(r.stage||1)+'</span></h3>'+
+  h+='<div class="reviewcard"><h3 style="display:flex;align-items:center;gap:8px;font-size:14px"><span class="dot"></span>'+r.workerRef+' — '+esc(w?w.role:'')+' '+pill(r.reason&&r.reason!=='Borderline'?capOutcome(w?w.outcome:'border'):'Borderline')+' <span class="rev-pill '+(r.stage===2?'rev-soon':'rev-over')+'">'+stageLabel(r.stage||1)+'</span></h3>'+
    '<div class="small" style="margin:6px 0">Raised '+r.raisedAt+' · now with <b>'+esc(r.assignedTo)+'</b> · SLA due <b>'+r.slaDue+'</b> · ruleset '+r.rulesetVersion+'</div>'+
-   '<div class="callout"><b>Engine lean:</b> Borderline'+(w&&w.full?' — key '+sgn(w.key)+' / 30, total '+sgn(w.total)+'. The key tests are not clearly positive, so the engine declined to determine.':' — mixed indicators across the key tests.')+'</div>'+
+   (r.reason&&r.reason!=='Borderline'
+    ? '<div class="callout" style="border-left-color:#c9860a"><b>Why this is here:</b> '+esc(r.reason)+'. Recomputed key '+sgn(w?w.key:0)+' / 30, total '+sgn(w?w.total:0)+' \u2014 now '+esc(capOutcome(w?w.outcome:'border'))+'. The contractor supplied '+esc(contractorCodes())+'; the hirer\u2019s own answers are unchanged. Any statement already issued is held pending your sign-off.</div>'
+    : '<div class="callout"><b>Engine lean:</b> Borderline'+(w&&w.full?' — key '+sgn(w.key)+' / 30, total '+sgn(w.total)+'. The key tests are not clearly positive, so the engine declined to determine.':' — mixed indicators across the key tests.')+'</div>')+
    evidenceList(w);
   if(r.stage===2&&r.stage1Reason){h+='<div class="callout" style="border-left-color:var(--teal)"><b>Stage 1 (internal) — escalated by '+esc(r.stage1By||'internal reviewer')+':</b> '+esc(r.stage1Reason)+'</div>';}
   if(canAct){
@@ -918,7 +871,7 @@ function migrateReviews(){
 }
 let RESP_LOCK=null;
 function setResp(r){if(RESP_LOCK&&r!==RESP_LOCK)return;RESP=(r==='contractor')?'contractor':'client';var c=document.getElementById('segClient'),o=document.getElementById('segCon');if(c)c.classList.toggle('active',RESP==='client');if(o)o.classList.toggle('active',RESP==='contractor');respScopeApply();}
-function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=document.getElementById('segClient'),o=document.getElementById('segCon'),pf=document.getElementById('prefill');if(c)c.classList.toggle('disabled',lock==='contractor');if(o)o.classList.toggle('disabled',lock==='client');if(pf)pf.style.display=(lock==='contractor')?'none':'';}
+function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=document.getElementById('segClient'),o=document.getElementById('segCon');if(c)c.classList.toggle('disabled',lock==='contractor');if(o)o.classList.toggle('disabled',lock==='client');}
 /* ===== Live boot: access-code gate → Ørsted Supabase (London) hydrate ===== */
 (function(){
  function el(tag,css,html){var e=document.createElement(tag);if(css)e.style.cssText=css;if(html!=null)e.innerHTML=html;return e;}
@@ -1190,6 +1143,89 @@ function outstandingContractorQs(){
  if(ASSESS_MODE==='role'||RESP==='contractor')return [];
  return currentRuleset().filter(function(q){return q.resp==='contractor';});}
 
+/* ===== CONTRACTOR -> HIRER MERGE (Aaron, 19 Aug 2026) =====
+   Closes the loop opened by respondent scoping. Before this, the contractor
+   questionnaire recorded answers that went nowhere, so C2/M1 stayed blank forever.
+
+   Rules, in order of importance:
+   1. THE HIRER DETERMINES. Only the resp:'contractor' answers merge into the
+      determination. The rest of the contractor's submission is stored verbatim for
+      the audit trail and never overrides the hirer's own answers - a contractor
+      cannot self-assess their way out of IR35.
+   2. AN ISSUED SDS IS NEVER SILENTLY REWRITTEN. If the merged answers change the
+      outcome, the case routes to a qualified reviewer and the SDS is marked under
+      review. The engine does not quietly flip a statement the hirer has signed.
+   3. Everything is audited: what was supplied, what it recomputed to, and whether
+      the outcome moved. */
+function contractorQs(){return RULESET.filter(function(q){return q.resp==='contractor';});}
+function contractorCodes(){return contractorQs().map(function(q){return q.code;}).join(' and ');}
+function contractorScopedAnswers(answers){var out={};contractorQs().forEach(function(q){
+  if(answers&&answers[q.id]!==undefined&&answers[q.id]!==null)out[q.id]=answers[q.id];});return out;}
+function hasContractorInput(w){return !!(w&&w.contractorSubmittedOn);}
+
+function commitContractorSubmission(){
+ var a=lastA;if(!a)return;
+ var u=CURRENT_USER,ref=u&&u.workerRef,box=document.getElementById('assessResult');
+ var w=ref?DB.worker(ref):null;
+ if(!w){box.innerHTML='<div class="card"><h3><span class="dot"></span>Not linked to an engagement</h3>'
+   +'<p class="small">Nothing has been saved. This account is not yet linked to an engagement on the '
+   +esc(TENANT.name)+' register, so there is no assessment to attach your answers to. '
+   +'Contact the end-hirer and submit again once you have been linked.</p></div>';return;}
+
+ var scoped=contractorScopedAnswers(a.answers);
+ if(!Object.keys(scoped).length){box.innerHTML='<div class="card"><h3><span class="dot"></span>Nothing to submit</h3>'
+   +'<p class="small">None of the contractor-only questions ('+esc(contractorCodes())+') were answered, so there is nothing to merge.</p></div>';return;}
+
+ var before=w.outcome, hadSDS=!!DB.sdsFor(ref);
+ if(!w.hirerAnswers)w.hirerAnswers=Object.assign({},w.answers||{});
+ w.contractorAnswers=scoped;
+ w.contractorEvidence=a.evidence||{};
+ w.contractorFullSubmission=a.answers;          /* context only - never scored */
+ w.contractorSubmittedOn=NOW;
+ w.contractorSubmittedBy=(u&&u.name)||'Contractor';
+
+ var merged=Object.assign({},w.hirerAnswers,scoped);
+ var d=assess(merged,RULESET);
+ w.answers=merged;w.key=d.keyScore;w.minor=d.minorScore;w.total=d.total;w.office=d.office;
+ DB.save();
+ DB.audit(ref,'Contractor questionnaire submitted',w.contractorSubmittedBy,
+   esc(contractorCodes())+' supplied by the contractor and merged into the assessment. Recomputed key '
+   +sgn(d.keyScore)+' / 30 · total '+sgn(d.total)+'. The hirer\u2019s own answers were not altered.');
+
+ var changed=(d.outcome!==before);
+ if(changed){
+  w.outcome=d.outcome;w.status=capOutcome(d.outcome);
+  w.sdsState=hadSDS?'Review required':'Referred';
+  if(hadSDS){var s=DB.sdsFor(ref);if(s)s.status='Under review \u2014 contractor input';}
+  if(!DB.reviewFor(ref)){
+   DB.s.reviews.push({tenantId:TENANT.id,workerRef:ref,reason:'Contractor input changed the outcome',
+    raisedAt:NOW+' '+new Date().toTimeString().slice(0,5),
+    assignedTo:'Orsted Head of Tax (internal senior reviewer)',status:'Awaiting internal review',
+    slaDue:addDays(NOW,5),rulesetVersion:RULESET_VERSION,stage:1,decision:null,reasoning:''});
+  }
+  DB.save();
+  DB.audit(ref,'\u26a0 Outcome changed by contractor input','Engine (merge gate)',
+    'Was '+capOutcome(before)+', recomputes to '+capOutcome(d.outcome)+'.'
+    +(hadSDS?' The issued SDS has NOT been rewritten \u2014 it is marked under review.':'')
+    +' Routed to a qualified reviewer for sign-off.');
+ } else {
+  DB.save();
+  DB.audit(ref,'Determination unchanged after contractor input','Engine (merge gate)',
+    'Outcome remains '+capOutcome(before)+' once '+esc(contractorCodes())+' are taken into account.');
+ }
+
+ box.innerHTML='<div class="card"><h3><span class="dot"></span>Submitted to '+esc(TENANT.name)+'</h3>'
+  +'<p class="small">Your answers to <b>'+esc(contractorCodes())+'</b> have been merged into assessment <b>'+esc(ref)+'</b> and recorded on the audit trail. '
+  +'Your remaining answers are kept as supporting context but do not change the end-hirer\u2019s determination \u2014 the determination is theirs to make.</p>'
+  +(changed
+    ? '<div class="gatebox">\u26a0 Taking your answers into account changes the assessment from <b>'+esc(capOutcome(before))+'</b> to <b>'+esc(capOutcome(d.outcome))+'</b>. '
+      +(hadSDS?'The statement already issued has <b>not</b> been altered \u2014 ':'')
+      +'the case has been routed to a qualified reviewer, who will confirm the position before anything is issued or reissued.</div>'
+    : '<p class="small">This does not change the determination \u2014 it remains <b>'+esc(capOutcome(before))+'</b>.</p>')
+  +'<div style="margin-top:12px"><button class="btn sec" onclick="go(\'mine\')">Back to my IR35 status \u2192</button></div></div>';
+ renderNav();
+}
+
 /* engine now takes a ruleset (defaults to the individual set) */
 function assess(answers,ruleset){
  let keyScore=0,minorScore=0,office=false,strengths=[],risks=[],items=[],flags=[];
@@ -1249,7 +1285,6 @@ function wireAssess(){
  const aeg=document.getElementById('aEngagement');if(aeg)aeg.style.display=roleM?'':'none';
  const ar=document.getElementById('aRole');if(ar)ar.placeholder=roleM?'Role title':'Role / assignment';
  const respSeg=document.getElementById('segClient').closest('.seg');if(respSeg)respSeg.style.display=roleM?'none':'';
- const sel=document.getElementById('prefill');if(sel&&sel.options.length<=1){SEED_FULL.forEach(w=>{const o=document.createElement('option');o.value=w.ref;o.textContent=w.ref+' · '+w.role.split(' — ')[0];sel.appendChild(o);});}
  const c=document.getElementById('quiz');let lastg=null,h='';
  currentRuleset().forEach((q,i)=>{const gc=q.band==='minor'?'minor':q.band==='override'?'override':q.band==='context'?'minor':'';if(q.grp!==lastg){h+='<div class="grphead '+gc+'">'+q.grp+'</div>';lastg=q.grp;}
   h+='<div class="q'+(q.resp==='contractor'?' resp-con':'')+'" id="q_'+q.id+'"><div class="qt">'+(q.code||(i+1))+'. '+q.t+'</div>'+(q.h?'<div class="qh"><b>Guidance:</b> '+q.h+'</div>':'')+'<div class="opts'+(q.multi?' multi':'')+'">';
@@ -1279,7 +1314,7 @@ function runAssess(){
  if(_out.length){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">&#8505; <b>Awaiting the contractor.</b> '+_out.map(function(q){return q.code;}).join(' and ')+' '+(_out.length>1?'are':'is')+' answered by the contractor, not the hirer. '+(_out.length>1?'They score':'It scores')+' neutral until supplied, and '+(_out.length>1?'the answers are':'the answer is')+' recorded against this assessment when the contractor completes their questionnaire.</div>';}
  if(!d.office&&d.strengths.length){h+='<p class="small" style="margin-top:8px"><b>Pointing outside</b></p><ul>'+d.strengths.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
  if(!d.office&&d.risks.length){h+='<p class="small" style="margin-top:8px"><b>Pointing inside</b></p><ul>'+d.risks.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
- if(CURRENT_USER&&CURRENT_USER.role==='contractor'){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">Your responses have been recorded and submitted to the client for the determination. As the contractor, you do not issue your own SDS.</div>';}else if(d.outcome==='border'){h+='<div class="gatebox">⛔ No SDS issued. This case is gated — it routes to a qualified IR35 reviewer for sign-off before any statement can be released.</div><div style="margin-top:12px"><button class="btn" onclick="commitBorder()">Send to expert-review queue →</button></div>';}
+ if(CURRENT_USER&&CURRENT_USER.role==='contractor'){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">As the contractor you do not issue your own SDS. Submitting sends your answers to the end-hirer; only the contractor-only questions ('+esc(contractorCodes())+') feed the determination \u2014 the rest is kept as supporting context.</div>'+'<div style="margin-top:12px"><button class="btn" onclick="commitContractorSubmission()">Submit my answers to the end-hirer \u2192</button></div>';}else if(d.outcome==='border'){h+='<div class="gatebox">⛔ No SDS issued. This case is gated — it routes to a qualified IR35 reviewer for sign-off before any statement can be released.</div><div style="margin-top:12px"><button class="btn" onclick="commitBorder()">Send to expert-review queue →</button></div>';}
  else{h+='<div style="margin-top:12px"><button class="btn" onclick="commitSDS()">Generate SDS &amp; add to register →</button></div>';}
  h+='</div>';
  document.getElementById('assessResult').innerHTML=h;
@@ -1301,16 +1336,14 @@ function renderRoleResult(answers,evidence,d){
 
 function roleAnswersFrom(pat){const o={};ROLE_RULESET.forEach(q=>{o[q.id]=pat[q.id];});return o;}
 function ensureRoles(){
+ /* DEMO SEED REMOVED 2026-08-19 (Aaron). This used to push 5 example roles
+    (Geotech / HV cable / PMO / M&E / Interim FD, tagged as sample data) into a tenant's
+    library on the first UI save whenever roles was empty - i.e. straight into a
+    NEW client's live library on day one. The role module below already overrode
+    this with a no-op; the seed body is now deleted outright so a refactor that
+    drops that override cannot resurrect it. NEVER seed example data into a
+    tenant store. */
  if(!DB.s)DB.load();if(!DB.s.roles)DB.s.roles=[];
- if(DB.s.roles.length)return;
- [['Offshore wind geotechnical engineer','Renewable energy — site investigation','Fixed deliverable, ~14 weeks','out'],
-  ['HV cable engineer','Renewable energy — install / marine','Fixed-price statement of work','out'],
-  ['Embedded PMO project coordinator','Construction — client PMO','Rolling monthly, full-time on site','in'],
-  ['M&E / SCADA commissioning engineer','Commissioning','~6 months, mixed site / remote','border'],
-  ['Interim Finance Director (statutory)','Board / interim','9-month interim, board-level','office']
- ].forEach((sd,i)=>{const ans=roleAnswersFrom(PAT[sd[3]]);const d=assess(ans,ROLE_RULESET);
-   DB.s.roles.push({tenantId:TENANT.id,roleId:'ROLE-'+(101+i),title:sd[0],sector:sd[1],engagement:sd[2],answers:ans,evidence:{},lean:d.office?'Inside':capOutcome(d.outcome),outcome:d.outcome,key:d.keyScore,total:d.total,office:d.office,rs:RULESET_VERSION,by:'Demo seed',date:NOW,stale:false});});
- DB.save();
 }
 
 function commitRole(){if(!lastRole)return;ensureRoles();const d=lastRole.d;const id=DB.nextId('ROLE');
