@@ -524,7 +524,9 @@ const DB={
      tenant is only ever created deliberately via DB.initialiseEmptyTenant(). */
   if(!s){var e=new Error('NO_TENANT_ROW');e.__noTenantRow=true;throw e;}
   {this.s=s;this.mem=s;}return this.s;},
- reset(){this.mem=null;this.s=this.seed();this._write(this.s);},
+ /* reset() deleted 2026-09-02 (debt register B-06 / D-05): an unguarded wipe of a live
+    tenant, five lines above the guarded initialiseEmptyTenant() that supersedes it, and
+    reachable from any console. It had no callers. */
  /* The ONLY sanctioned way to create a tenant store. Deliberately not wired to any button:
     a control that initialises a tenant store is a control that can destroy one. Provision the
     row at onboarding, or have the platform admin call this once from the console. */
@@ -816,37 +818,17 @@ function roleSummaryBlock(w){
  return '<h2>Role summary</h2><div class="sds-statement">'+esc(s)+'</div>';
 }
 
-function buildLoginUI(){
+function initShell(){
+ /* B-06: the demo role-picker and loginAs() are deleted. A control that lets a signed-in user
+    choose their own role is a privilege-escalation control sitting in the page. Role now comes
+    from the JWT only, in enterAsAuthedUser(). Two side effects of the old buildLoginUI() are
+    load-bearing and kept here: the contractor's #mine view section, and the logout styling. */
  const st=document.createElement('style');
- st.textContent='#loginScreen{position:fixed;inset:0;z-index:300;background:linear-gradient(135deg,#0C365F,#001E5A);display:flex;align-items:center;justify-content:center;padding:24px;overflow:auto}'+
-  '.loginbox{background:#fff;border-radius:16px;max-width:540px;width:100%;padding:32px;box-shadow:0 30px 80px rgba(0,0,0,.4)}'+
-  '.loginbox img{height:36px;margin-bottom:6px}.loginbox h2{font-size:19px;margin:8px 0 2px}.loginbox .sub{color:var(--muted);font-size:13px;margin-bottom:16px}'+
-  '.loginbox .field{margin-bottom:10px}.loginbox label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px}'+
-  '.loginbox input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font-size:13px;font-family:inherit}'+
-  '.rolelist{display:flex;flex-direction:column;gap:7px;margin-top:6px}'+
-  '.rolebtn{display:flex;align-items:center;gap:12px;text-align:left;border:1px solid var(--line);background:#fff;border-radius:11px;padding:11px 13px;cursor:pointer;font-family:inherit}'+
-  '.rolebtn:hover{border-color:var(--teal);background:var(--green-bg)}.rolebtn .rn{font-weight:700;font-size:13px}.rolebtn .rd{font-size:11px;color:var(--muted)}'+
-  '.rolebtn .ric{width:32px;height:32px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px}'+
-  '.logindis{font-size:11px;color:var(--muted);margin-top:14px;border-top:1px solid var(--line);padding-top:11px}'+
-  'header .right .logout{margin-top:6px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:4px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}';
+ st.textContent='header .right .logout{margin-top:6px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:4px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}';
  document.head.appendChild(st);
- const roles=[['platform','Ascend Platform Admin','Cross-tenant owner — every tenant, ruleset and config','#003182'],
-  ['clientadmin','Client Administrator','Full access within Orsted — assess, issue SDS, manage users','#218380'],
-  ['linemanager','Line Manager','Assess and view all Orsted workers; filter to their own','#176561'],
-  ['internalreviewer','Internal Senior Reviewer','Senior Orsted stakeholder — approves or escalates borderline (Stage 1)','#0C365F'],
-  ['reviewer','Expert Reviewer (Bauer & Cottrell)','External legal/tax expert — final borderline sign-off (Stage 2)','#9C2373'],
-  ['contractor','Contractor','Gated — own questionnaire and own SDS only','#6b7280']];
- const ov=document.createElement('div');ov.id='loginScreen';
- ov.innerHTML='<div class="loginbox"><img src="Ascend_Logo_Colour.svg" alt="Ascend"><h2>IR35 Workbench</h2><div class="sub">Off-payroll status, evidence &amp; reporting — '+esc(TENANT.name)+'</div>'+
-  '<div class="field"><label>Your name <span style="font-weight:400;text-transform:none">(recorded on the audit trail)</span></label><input id="loginName" placeholder="Your full name"></div>'+
-  '<label style="font-size:12px;font-weight:700;color:var(--muted)">Select your role to continue</label>'+
-  '<div class="rolelist">'+roles.map(r=>'<button class="rolebtn" onclick="loginAs(\''+r[0]+'\')"><span class="ric" style="background:'+r[3]+'">'+r[1][0]+'</span><span><span class="rn">'+r[1]+'</span><br><span class="rd">'+r[2]+'</span></span></button>').join('')+'</div>'+
-  '<div class="logindis">Client-confidential. Access is controlled by your '+esc(TENANT.name)+' administrator.</div></div>';
- document.body.appendChild(ov);
  const main=document.querySelector('main');const sec=document.createElement('section');sec.className='view';sec.id='mine';main.appendChild(sec);
  migrateReviews();
 }
-function loginAs(key){CURRENT_USER=Object.assign({},USERS[key]);var _n=document.getElementById('loginName');if(_n&&_n.value.trim())CURRENT_USER.name=_n.value.trim();document.getElementById('loginScreen').style.display='none';renderNav();go(defaultTab(CURRENT_USER.role));}
 function logout(){try{if(window.__sb)window.__sb.auth.signOut();}catch(e){}CURRENT_USER=null;location.reload();}
 function updateHeader(){if(!CURRENT_USER)return;const r=document.querySelector('header .right');if(!r)return;r.innerHTML='<b>'+esc(CURRENT_USER.title)+' — '+esc(CURRENT_USER.name)+'</b><span>Tenant: '+esc(CURRENT_USER.tenant)+' · ruleset '+RULESET_VERSION+'</span><button class="logout" onclick="logout()">Log out</button>';}
 
@@ -1000,7 +982,7 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
    return;}
   saveFlagInit();
   var b=document.getElementById('wbBanner');if(b)b.textContent=TENANT.name+' — client-confidential. Off-payroll status determinations. Decision-support, not legal advice.';
-  buildLoginUI();var _ls=document.getElementById('loginScreen');if(_ls)_ls.style.display='none';enterAsAuthedUser();
+  initShell();enterAsAuthedUser();
  }
  /* ---- Per-user authentication (Supabase Auth: email + password + TOTP MFA) ---- */
  var ROLE_MAP={platform:'platform',clientadmin:'clientadmin',linemanager:'linemanager',internalreviewer:'internalreviewer',reviewer:'reviewer',contractor:'contractor'};
@@ -1014,7 +996,11 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
   CURRENT_USER.email=user.email;
   if(roleKey!=='platform'&&meta.tenant)CURRENT_USER.tenant=TENANT.name;
   if(roleKey==='contractor'&&meta.worker_ref)CURRENT_USER.workerRef=meta.worker_ref;
-  var ls=document.getElementById('loginScreen');if(ls)ls.style.display='none';
+  /* Speed bump, NOT a security boundary. Freezing stops the one-line console promotion
+     (CURRENT_USER.role='platform';renderNav()). Real enforcement is RLS in Postgres plus
+     moving the sign-off gate server-side (B-07). A client-side role check is never
+     authorisation — it only decides what to draw. */
+  try{Object.freeze(CURRENT_USER);}catch(e){}
   renderNav();go(defaultTab(CURRENT_USER.role));
  }
  function abody(){return document.getElementById('wbAuthBody');}
