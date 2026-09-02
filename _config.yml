@@ -1,0 +1,10 @@
+# GitHub Pages (Jekyll) configuration.
+# Keep build inputs out of the published site. They stay in the repository —
+# which is public — but they are not served from ir35workbench.co.uk.
+exclude:
+  - build.py
+  - src
+  - clients
+  - assets
+  - README.md
+  - _config.yml

@@ -4,7 +4,7 @@
 <title>IR35 Workbench — Ascend Workforce Solutions</title>
 <script>
 /* Per-client config — injected at deploy time (each client instance = its own isolated store) */
-window.WB={CLIENT_ID:'__CLIENT_ID__',TENANT_NAME:'__TENANT_NAME__',SUPABASE_URL:'__SUPABASE_URL__',SUPABASE_ANON_KEY:'__SUPABASE_ANON_KEY__',ACCESS_CODE:'__ACCESS_CODE__'};
+window.WB={CLIENT_ID:'{{CLIENT_ID}}',TENANT_NAME:'{{TENANT_NAME}}',TENANT_SHORT:'{{TENANT_SHORT}}',SECTOR:'{{SECTOR}}',ADVISER_NAME:'{{ADVISER_NAME}}',INTERNAL_REVIEWER:'{{INTERNAL_REVIEWER}}',SUPABASE_URL:'{{SUPABASE_URL}}',SUPABASE_ANON_KEY:'{{SUPABASE_ANON_KEY}}',ANALYZER_URL:'{{ANALYZER_URL}}'};
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -184,7 +184,7 @@ window.WB={CLIENT_ID:'__CLIENT_ID__',TENANT_NAME:'__TENANT_NAME__',SUPABASE_URL:
 <header>
  <img class="logoimg" src="Ascend_Logo_Colour.svg" alt="Ascend">
  <div><h1>IR35 Workbench</h1><div class="sub">Off-payroll status, evidence &amp; reporting — contingent workforce</div></div>
- <div class="right"><b id="hdrTenant">Tenant: Orsted</b><span id="hdrMeta">Workers in scope: 14 · ruleset v0.3</span></div>
+ <div class="right"><b id="hdrTenant">Tenant: {{TENANT_SHORT}}</b><span id="hdrMeta">Workers in scope: 14 · ruleset v0.3</span></div>
 </header>
 <nav id="nav"></nav>
 <main>
@@ -282,6 +282,11 @@ window.WB={CLIENT_ID:'__CLIENT_ID__',TENANT_NAME:'__TENANT_NAME__',SUPABASE_URL:
  </div>
 </section>
 
+<section class="view" id="analyser"><div class="card"><h2>Contract Analyser</h2>
+<p class="lead">Upload a written contract (Word, PDF or text). The analyser returns a clause-cited IR35 <b>risk assessment</b> across 28 factors. It flags contract risk — it does not issue a Status Determination.</p>
+<div style="margin-top:12px"><input type="file" id="caFile" accept=".docx,.pdf,.txt"> <button class="btn" onclick="runAnalyser()">Analyse contract</button></div>
+<div id="caProg" class="small" style="margin-top:10px;display:none"></div></div>
+<div id="caResult"></div></section>
 <section class="view" id="guides"><div id="guidesBody"></div></section>
 </main>
 <div id="sdsOverlay"></div>
@@ -467,7 +472,7 @@ function esc(t){return (t==null?'':String(t)).replace(/&/g,'&amp;').replace(/</g
 
 /* ============================== SEED ============================== */
 const NOW=(function(){try{return new Date().toISOString().slice(0,10);}catch(e){return '2026-06-11';}})();
-const TENANT={id:(window.WB&&WB.CLIENT_ID)||'orsted',name:(window.WB&&WB.TENANT_NAME)||'Orsted',sector:'Renewable energy',cadence:12};
+const TENANT={id:(window.WB&&WB.CLIENT_ID)||'{{CLIENT_ID}}',name:(window.WB&&WB.TENANT_NAME)||'{{TENANT_SHORT}}',sector:'{{SECTOR}}',cadence:12};
 /* Sample/demo data removed 2026-08-19 (Aaron). SEED_FULL, SEED_DISPLAY and
    the role-library sample list held invented worker and role records, and
    example library roles. The controls that surfaced them had already been taken
@@ -643,7 +648,7 @@ function runAssess(){
 }
 function mkWorker(ref,a,outcome){const w={tenantId:TENANT.id,ref,worker:a.worker,role:a.role,engagement:'Entered via live assessment',rate:0,bucket:'Other',answers:a.answers,evidence:a.evidence,outcome,key:a.d.keyScore,minor:a.d.minorScore,total:a.d.total,office:a.d.office,status:capOutcome(outcome),assessedOn:NOW,sdsState:'None',nextReview:null,full:true};DB.s.workers.push(w);return w;}
 function commitSDS(){const a=lastA,ref=DB.nextId('AS'),w=mkWorker(ref,a,a.d.outcome);const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome:a.d.outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12)});w.sdsState='Issued';w.nextReview=addMonths(NOW,12);w.lastSDS=NOW;DB.audit(ref,'Assessment completed',(CURRENT_USER?CURRENT_USER.name:'Client')+' ('+RESP+' respondent)','Outcome '+capOutcome(a.d.outcome)+' · key '+sgn(a.d.keyScore)+' · total '+sgn(a.d.total));DB.audit(ref,'SDS issued','Ascend Workforce Solutions',sref+' — '+capOutcome(a.d.outcome)+(a.d.office?' (office-holder override)':''));renderNav();openSDS(ref);}
-function commitBorder(){const a=lastA,ref=DB.nextId('AS'),w=mkWorker(ref,a,'border');w.sdsState='Referred';DB.s.reviews.push({tenantId:TENANT.id,workerRef:ref,reason:'Borderline',raisedAt:NOW+' '+new Date().toTimeString().slice(0,5),assignedTo:'Orsted Head of Tax (internal senior reviewer)',status:'Awaiting internal review',slaDue:addDays(NOW,5),rulesetVersion:RULESET_VERSION,stage:1,decision:null,reasoning:''});DB.audit(ref,'Assessment completed',(CURRENT_USER?CURRENT_USER.name:'Client')+' ('+RESP+' respondent)','Outcome Borderline · key '+sgn(a.d.keyScore)+' · total '+sgn(a.d.total));DB.audit(ref,'Routed to expert review','Engine (borderline gate)','No SDS issued. SLA due '+addDays(NOW,5)+'.');if(a.outstanding&&a.outstanding.length){DB.audit(ref,'Contractor questions outstanding','Respondent scoping',a.outstanding.join(', ')+' — contractor-sourced, not answerable by the hirer. Scored neutral pending the contractor questionnaire.');}renderNav();go('review');}
+function commitBorder(){const a=lastA,ref=DB.nextId('AS'),w=mkWorker(ref,a,'border');w.sdsState='Referred';DB.s.reviews.push({tenantId:TENANT.id,workerRef:ref,reason:'Borderline',raisedAt:NOW+' '+new Date().toTimeString().slice(0,5),assignedTo:'{{INTERNAL_REVIEWER}} (internal senior reviewer)',status:'Awaiting internal review',slaDue:addDays(NOW,5),rulesetVersion:RULESET_VERSION,stage:1,decision:null,reasoning:''});DB.audit(ref,'Assessment completed',(CURRENT_USER?CURRENT_USER.name:'Client')+' ('+RESP+' respondent)','Outcome Borderline · key '+sgn(a.d.keyScore)+' · total '+sgn(a.d.total));DB.audit(ref,'Routed to expert review','Engine (borderline gate)','No SDS issued. SLA due '+addDays(NOW,5)+'.');if(a.outstanding&&a.outstanding.length){DB.audit(ref,'Contractor questions outstanding','Respondent scoping',a.outstanding.join(', ')+' — contractor-sourced, not answerable by the hirer. Scored neutral pending the contractor questionnaire.');}renderNav();go('review');}
 
 /* ============================== JD ANALYSER ============================== */
 const jdEmpty='<h3><span class="dot"></span>Analysis</h3><p class="small">Paste a job description and press Analyse. The tool extracts IR35 signals and suggests a lean — it never issues a determination.</p>';
@@ -683,11 +688,11 @@ function renderReview(){
  document.getElementById('reviewList').innerHTML=h;
 }
 function evidenceList(w){if(!w||!w.evidence||!Object.keys(w.evidence).length)return '';return '<div class="small" style="margin-top:8px"><b>Evidence notes attached</b>'+Object.keys(w.evidence).map(id=>{const q=RULESET.find(x=>x.id===id);return '<div>• <b>'+esc(q?q.t.replace(/[—].*$/,'').trim():id)+':</b> '+esc(w.evidence[id])+'</div>';}).join('')+'</div>';}
-function signOff(ref){const dec=document.getElementById('dec_'+ref).value;const rea=(document.getElementById('rea_'+ref).value||'').trim();if(!dec){alert('Select a decision.');return;}if(!rea){alert('Reviewer reasoning is mandatory — a bare verdict is weak reasonable-care evidence.');return;}const r=DB.reviewFor(ref),w=DB.worker(ref);r.reasoning=rea;r.signedOffBy='Bauer & Cottrell (external adviser)';r.signedOffAt=NOW+' '+new Date().toTimeString().slice(0,5);
- if(dec==='Needs more info'){r.status='Returned for info';DB.audit(ref,'Returned for more information','Bauer & Cottrell',rea);renderNav();go('review');return;}
+function signOff(ref){const dec=document.getElementById('dec_'+ref).value;const rea=(document.getElementById('rea_'+ref).value||'').trim();if(!dec){alert('Select a decision.');return;}if(!rea){alert('Reviewer reasoning is mandatory — a bare verdict is weak reasonable-care evidence.');return;}const r=DB.reviewFor(ref),w=DB.worker(ref);r.reasoning=rea;r.signedOffBy='{{ADVISER_NAME}} (external adviser)';r.signedOffAt=NOW+' '+new Date().toTimeString().slice(0,5);
+ if(dec==='Needs more info'){r.status='Returned for info';DB.audit(ref,'Returned for more information','{{ADVISER_NAME}}',rea);renderNav();go('review');return;}
  r.status='Signed off';r.decision=dec;const outcome=dec==='Outside'?'out':'in';w.outcome=outcome;w.status=dec;w.sdsState='Issued';w.nextReview=addMonths(NOW,12);w.lastSDS=NOW;
- const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12),reviewer:'Bauer & Cottrell',reviewerReasoning:rea});
- DB.audit(ref,'Expert review signed off','Bauer & Cottrell (external adviser)','Decision: '+dec+'. '+rea);DB.audit(ref,'SDS issued','Ascend Workforce Solutions',sref+' — '+dec+' (released after expert sign-off)');renderNav();openSDS(ref);}
+ const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12),reviewer:'{{ADVISER_NAME}}',reviewerReasoning:rea});
+ DB.audit(ref,'Expert review signed off','{{ADVISER_NAME}} (external adviser)','Decision: '+dec+'. '+rea);DB.audit(ref,'SDS issued','Ascend Workforce Solutions',sref+' — '+dec+' (released after expert sign-off)');renderNav();openSDS(ref);}
 
 /* ============================== SDS REVIEW CALENDAR ============================== */
 function renderReviews(){
@@ -739,21 +744,21 @@ function closeSDS(){const ov=document.getElementById('sdsOverlay');ov.classList.
 
 /* ============================== AUTH / RBAC + TWO-STAGE REVIEW (demonstration access) ============================== */
 const ROLE_TABS={
- platform:['dash','assess','jd','library','register','review','reviews','audit','guides'],
- clientadmin:['dash','assess','jd','library','register','review','reviews','audit','guides'],
+ platform:['dash','assess','jd','library','register','review','reviews','audit','analyser','guides'],
+ clientadmin:['dash','assess','jd','library','register','review','reviews','audit','analyser','guides'],
  linemanager:['dash','assess','jd','library','register','reviews','audit','guides'],
  internalreviewer:['review','register','audit','guides'],
  reviewer:['review','audit','guides'],
  contractor:['mine','assess','guides']
 };
-const NAVLABEL={dash:'Reporting Dashboard',assess:'New Assessment',jd:'JD Analyser',library:'Role Library',register:'Worker Register',review:'Review Queue',reviews:'SDS Reviews',audit:'Audit & Disputes',mine:'My IR35 status',guides:'Guides'};
+const NAVLABEL={dash:'Reporting Dashboard',assess:'New Assessment',jd:'JD Analyser',library:'Role Library',register:'Worker Register',review:'Review Queue',reviews:'SDS Reviews',audit:'Audit & Disputes',analyser:'Contract Analyser',mine:'My IR35 status',guides:'Guides'};
 const USERS={
  platform:{role:'platform',name:'Aaron George',title:'Ascend Platform Admin',tenant:'All tenants'},
- clientadmin:{role:'clientadmin',name:'Orsted IR35 Administrator',title:'Client Administrator',tenant:'Orsted'},
- linemanager:{role:'linemanager',name:'Site Investigation Lead',title:'Line Manager',tenant:'Orsted',myRefs:[]},
- internalreviewer:{role:'internalreviewer',name:'Orsted Head of Tax',title:'Internal Senior Reviewer',tenant:'Orsted'},
- reviewer:{role:'reviewer',name:'Bauer & Cottrell',title:'Expert Reviewer (external)',tenant:'Orsted'},
- contractor:{role:'contractor',name:'Contractor',title:'Contractor',tenant:'Orsted',workerRef:null}
+ clientadmin:{role:'clientadmin',name:'{{TENANT_SHORT}} IR35 Administrator',title:'Client Administrator',tenant:'{{TENANT_SHORT}}'},
+ linemanager:{role:'linemanager',name:'Site Investigation Lead',title:'Line Manager',tenant:'{{TENANT_SHORT}}',myRefs:[]},
+ internalreviewer:{role:'internalreviewer',name:'{{INTERNAL_REVIEWER}}',title:'Internal Senior Reviewer',tenant:'{{TENANT_SHORT}}'},
+ reviewer:{role:'reviewer',name:'{{ADVISER_NAME}}',title:'Expert Reviewer (external)',tenant:'{{TENANT_SHORT}}'},
+ contractor:{role:'contractor',name:'Contractor',title:'Contractor',tenant:'{{TENANT_SHORT}}',workerRef:null}
 };
 function tabsFor(role){return ROLE_TABS[role]||[];}
 function canSignOff(role){return role==='reviewer'||role==='internalreviewer'||role==='platform';}
@@ -789,10 +794,10 @@ function buildLoginUI(){
   'header .right .logout{margin-top:6px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:4px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}';
  document.head.appendChild(st);
  const roles=[['platform','Ascend Platform Admin','Cross-tenant owner — every tenant, ruleset and config','#003182'],
-  ['clientadmin','Client Administrator','Full access within Orsted — assess, issue SDS, manage users','#218380'],
-  ['linemanager','Line Manager','Assess and view all Orsted workers; filter to their own','#176561'],
-  ['internalreviewer','Internal Senior Reviewer','Senior Orsted stakeholder — approves or escalates borderline (Stage 1)','#0C365F'],
-  ['reviewer','Expert Reviewer (Bauer & Cottrell)','External legal/tax expert — final borderline sign-off (Stage 2)','#9C2373'],
+  ['clientadmin','Client Administrator','Full access within {{TENANT_SHORT}} — assess, issue SDS, manage users','#218380'],
+  ['linemanager','Line Manager','Assess and view all {{TENANT_SHORT}} workers; filter to their own','#176561'],
+  ['internalreviewer','Internal Senior Reviewer','Senior {{TENANT_SHORT}} stakeholder — approves or escalates borderline (Stage 1)','#0C365F'],
+  ['reviewer','Expert Reviewer ({{ADVISER_NAME}})','External legal/tax expert — final borderline sign-off (Stage 2)','#9C2373'],
   ['contractor','Contractor','Gated — own questionnaire and own SDS only','#6b7280']];
  const ov=document.createElement('div');ov.id='loginScreen';
  ov.innerHTML='<div class="loginbox"><img src="Ascend_Logo_Colour.svg" alt="Ascend"><h2>IR35 Workbench</h2><div class="sub">Off-payroll status, evidence &amp; reporting — '+esc(TENANT.name)+'</div>'+
@@ -805,7 +810,7 @@ function buildLoginUI(){
  migrateReviews();
 }
 function loginAs(key){CURRENT_USER=Object.assign({},USERS[key]);var _n=document.getElementById('loginName');if(_n&&_n.value.trim())CURRENT_USER.name=_n.value.trim();document.getElementById('loginScreen').style.display='none';renderNav();go(defaultTab(CURRENT_USER.role));}
-function logout(){CURRENT_USER=null;const ls=document.getElementById('loginScreen');if(ls)ls.style.display='flex';}
+function logout(){try{if(window.__sb)window.__sb.auth.signOut();}catch(e){}CURRENT_USER=null;location.reload();}
 function updateHeader(){if(!CURRENT_USER)return;const r=document.querySelector('header .right');if(!r)return;r.innerHTML='<b>'+esc(CURRENT_USER.title)+' — '+esc(CURRENT_USER.name)+'</b><span>Tenant: '+esc(CURRENT_USER.tenant)+' · ruleset '+RULESET_VERSION+'</span><button class="logout" onclick="logout()">Log out</button>';}
 
 function renderNav(){
@@ -824,9 +829,46 @@ function go(id){
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.v===id));
  if(id==='assess'){wireAssess();var _lock=CURRENT_USER.role==='contractor'?'contractor':(CURRENT_USER.role==='linemanager'?'client':null);applyRespLock(_lock);if(CURRENT_USER.role==='contractor'){const aw=document.getElementById('aWorker');if(aw){aw.value=CURRENT_USER.name;aw.readOnly=true;}const w=DB.worker(CURRENT_USER.workerRef);const ar=document.getElementById('aRole');if(ar&&w){ar.value=w.role;ar.readOnly=true;}}}
  else if(id==='register'){renderRegister();if(CURRENT_USER.role==='linemanager')injectLMFilter();}
- else {({dash:renderDashboard,jd:initJD,library:renderLibrary,review:renderReview,reviews:renderReviews,audit:renderAudit,mine:renderMine,guides:renderGuides}[id]||function(){})();}
+ else {({dash:renderDashboard,jd:initJD,library:renderLibrary,review:renderReview,reviews:renderReviews,audit:renderAudit,analyser:initAnalyser,mine:renderMine,guides:renderGuides}[id]||function(){})();}
  window.scrollTo(0,0);
 }
+function initAnalyser(){}
+function caEsc(s){return (s==null?'':String(s)).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+async function runAnalyser(){
+ var f=document.getElementById('caFile'),prog=document.getElementById('caProg'),res=document.getElementById('caResult');
+ res.innerHTML='';prog.style.display='block';
+ if(!f||!f.files||!f.files[0]){prog.textContent='Choose a contract file first.';return;}
+ var token='';try{var s=await window.__sb.auth.getSession();token=(s&&s.data&&s.data.session)?s.data.session.access_token:'';}catch(e){}
+ var fd=new FormData();fd.append('file',f.files[0]);fd.append('contract_id',f.files[0].name);
+ prog.textContent='Uploading and starting analysis…';
+ var job;
+ try{var r=await fetch(WB.ANALYZER_URL+'/analyze',{method:'POST',headers:token?{'Authorization':'Bearer '+token}:{},body:fd});job=await r.json();if(!r.ok||!job.job_id){throw new Error(job.detail||('HTTP '+r.status));}}
+ catch(e){prog.textContent='Could not start analysis: '+e.message;return;}
+ var total=job.total||28;
+ var poll=setInterval(function(){
+  fetch(WB.ANALYZER_URL+'/analyze/'+job.job_id).then(function(pr){return pr.json();}).then(function(p){
+   if(p.status==='running'){prog.textContent='Grading factor '+(p.progress||0)+'/'+(p.total||total)+'… (a full contract takes a couple of minutes)';return;}
+   clearInterval(poll);
+   if(p.status==='error'){prog.textContent='Analysis failed: '+(p.error||'unknown error');return;}
+   prog.style.display='none';renderContractAssessment(p.assessment);
+  }).catch(function(e){});
+ },4000);
+}
+function renderContractAssessment(a){
+ if(!a){document.getElementById('caResult').innerHTML='<div class="card">No assessment returned.</div>';return;}
+ var r=a.overall_rating,bcol=r==='COMPLIANT'?'#1a9c5b':(r==='INSIDE'?'#c0392b':'#c9860a');
+ var h='<div class="card"><div style="border-radius:8px;padding:14px 16px;color:#fff;font-weight:700;background:'+bcol+'">'+caEsc(a.overall_label)+' — '+caEsc(a.contract_id)+'<div style="font-weight:500;font-size:12px;margin-top:4px;opacity:.95">'+caEsc(a.executive_summary)+'</div></div>';
+ if(a.qa&&a.qa.needs_human_qa){h+='<div style="margin-top:12px;border-left:4px solid #c9860a;background:#fdf3e0;padding:10px 12px;border-radius:6px;font-size:12.5px"><b>Routed to Ascend QA before use.</b> '+caEsc((a.qa.reasons||[]).join('; '))+'</div>';}
+ h+='</div>';
+ if(a.recommended_actions&&a.recommended_actions.length){h+='<div class="card"><h3><span class="dot"></span>Recommended actions</h3><ul>'+a.recommended_actions.map(function(x){return '<li>'+caEsc(x)+'</li>';}).join('')+'</ul></div>';}
+ h+='<div class="card"><h3><span class="dot"></span>Factor grid — 28 tests</h3><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left">Factor</th><th>Band</th><th>Grade</th><th style="text-align:left">Cited clause / quote</th></tr></thead><tbody>';
+ h+=(a.factor_grid||[]).map(function(g){var gc=g.grade==='GREEN'?'#1a9c5b':(g.grade==='RED'?'#c0392b':(g.grade==='AMBER'?'#c9860a':'#5b7085'));return '<tr><td style="border-top:1px solid #eee"><b>'+caEsc(g.factor)+'</b> '+caEsc(g.name)+'</td><td style="border-top:1px solid #eee;text-align:center">'+caEsc(g.band)+'</td><td style="border-top:1px solid #eee;text-align:center;color:'+gc+';font-weight:700">'+caEsc(g.grade)+'</td><td style="border-top:1px solid #eee;color:#5b7085">'+(g.quote?('“'+caEsc(String(g.quote).slice(0,160))+'”'):'—')+'</td></tr>';}).join('');
+ h+='</tbody></table></div>';
+ var b=a.basis||{};
+ h+='<div class="card"><div style="font-size:11.5px;color:#5b7085"><b>'+caEsc(b.caveat||'')+'</b><br>Model '+caEsc(b.model_version||'')+' · prompt '+caEsc(b.prompt_version||'')+' · rubric '+caEsc(b.rubric_version||'')+'</div></div>';
+ document.getElementById('caResult').innerHTML=h;
+}
+
 function renderGuides(){var contractor=CURRENT_USER&&CURRENT_USER.role==='contractor';var G=[];if(!contractor){G.push({t:'Hirer guide',d:'For contract managers and line managers \u2014 signing in, the tabs, assessing roles and workers, issuing an SDS, and reasonable care.',f:'guides/Ascend_IR35_Workbench_Hirer_Guide.pdf'});}G.push({t:'Contractor guide',d:'For contractors completing their own questionnaire \u2014 what to have ready, how to answer, and what happens next.',f:'guides/Ascend_IR35_Workbench_Contractor_Guide.pdf'});var h='<h2>Guides</h2><p class="lead">Short PDF guides to using the IR35 Workbench. They open in a new tab.</p><div class="grid2">';h+=G.map(function(g){return '<div class="card"><h3><span class="dot"></span>'+g.t+'</h3><p class="small">'+g.d+'</p><div style="margin-top:10px"><a class="btn" href="'+g.f+'" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">Open guide (PDF) &rarr;</a></div></div>';}).join('');h+='</div>';document.getElementById('guidesBody').innerHTML=h;}
 function injectLMFilter(){const tb=document.querySelector('#register .toolbar');if(!tb||document.getElementById('lmMine'))return;const lbl=document.createElement('label');lbl.style.cssText='display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--navy)';lbl.innerHTML='<input type="checkbox" id="lmMine" onchange="renderRegister()"> My workers only';tb.insertBefore(lbl,document.getElementById('regCount'));}
 function renderMine(){
@@ -857,13 +899,13 @@ function renderReview(){
    evidenceList(w);
   if(r.stage===2&&r.stage1Reason){h+='<div class="callout" style="border-left-color:var(--teal)"><b>Stage 1 (internal) — escalated by '+esc(r.stage1By||'internal reviewer')+':</b> '+esc(r.stage1Reason)+'</div>';}
   if(canAct){
-   h+='<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px"><div class="small" style="font-weight:700;margin-bottom:6px">'+(r.stage===2?'External expert decision (Bauer & Cottrell)':'Internal senior reviewer decision')+'</div>'+
+   h+='<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px"><div class="small" style="font-weight:700;margin-bottom:6px">'+(r.stage===2?'External expert decision ({{ADVISER_NAME}})':'Internal senior reviewer decision')+'</div>'+
     '<select id="dec_'+r.workerRef+'" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"><option value="">Select decision…</option><option>Outside</option><option>Inside</option><option>Needs more info</option></select>'+
     '<textarea id="rea_'+r.workerRef+'" class="qnote" placeholder="Reasoning (mandatory) — recorded to the audit trail and referenced on the SDS." style="display:block;min-height:60px"></textarea>'+
     '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="signOff(\''+r.workerRef+'\')">Approve &amp; release SDS →</button>'+
     ((r.stage||1)===1?'<button class="btn sec" onclick="escalate(\''+r.workerRef+'\')">Escalate to external expert →</button>':'')+'</div></div>';
   } else {
-   h+='<div class="callout" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">Awaiting <b>'+(r.stage===2?'the external expert (Bauer & Cottrell)':'the internal senior reviewer')+'</b>. '+(canSignOff(role)?'You do not have authority over this stage.':'Only a designated reviewer can sign off a borderline determination.')+'</div>';
+   h+='<div class="callout" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">Awaiting <b>'+(r.stage===2?'the external expert ({{ADVISER_NAME}})':'the internal senior reviewer')+'</b>. '+(canSignOff(role)?'You do not have authority over this stage.':'Only a designated reviewer can sign off a borderline determination.')+'</div>';
   }
   h+='</div>';});
  if(done.length){h+='<div class="card"><h3><span class="dot"></span>Closed reviews</h3><table><thead><tr><th>Worker</th><th>Decision</th><th>Resolved at</th><th>By</th></tr></thead><tbody>'+done.map(r=>'<tr><td><b>'+r.workerRef+'</b></td><td>'+(r.decision?pill(r.decision):esc(r.status))+'</td><td class="small">'+esc(r.signedOffAt||'—')+'</td><td class="small">'+esc(r.signedOffBy||r.assignedTo)+'</td></tr>').join('')+'</tbody></table></div>';}
@@ -872,7 +914,7 @@ function renderReview(){
 function escalate(ref){
  const r=DB.reviewFor(ref);if(!canActStage(CURRENT_USER&&CURRENT_USER.role,r.stage||1)){alert('You cannot act on this stage.');return;}
  const rea=(document.getElementById('rea_'+ref).value||'').trim();if(!rea){alert('Please record why you are escalating — it is part of the reasonable-care evidence.');return;}
- r.stage=2;r.status='Escalated — awaiting external';r.assignedTo='Bauer & Cottrell (external adviser)';r.stage1By=CURRENT_USER.name;r.stage1Reason=rea;r.slaDue=addDays(NOW,5);
+ r.stage=2;r.status='Escalated — awaiting external';r.assignedTo='{{ADVISER_NAME}} (external adviser)';r.stage1By=CURRENT_USER.name;r.stage1Reason=rea;r.slaDue=addDays(NOW,5);
  DB.audit(ref,'Escalated to external expert (Stage 2)',CURRENT_USER.name,rea);renderNav();go('review');
 }
 function signOff(ref){
@@ -893,9 +935,9 @@ function signOff(ref){
  renderNav();openSDS(ref);
 }
 function migrateReviews(){
- DB.s.reviews.forEach(r=>{if(!r.stage)r.stage=1;if(r.stage===1&&(!r.assignedTo||r.assignedTo.indexOf('Bauer')===0)&&r.status&&r.status.indexOf('Awaiting')===0){r.assignedTo='Orsted Head of Tax (internal senior reviewer)';r.status='Awaiting internal review';}});
+ DB.s.reviews.forEach(r=>{if(!r.stage)r.stage=1;if(r.stage===1&&(!r.assignedTo||r.assignedTo.indexOf('Bauer')===0)&&r.status&&r.status.indexOf('Awaiting')===0){r.assignedTo='{{INTERNAL_REVIEWER}} (internal senior reviewer)';r.status='Awaiting internal review';}});
  // demonstrate Stage 2: escalate AS-2322 to the external expert
- const e=DB.reviewFor('AS-2322');if(e&&e.stage===1){e.stage=2;e.status='Escalated — awaiting external';e.assignedTo='Bauer & Cottrell (external adviser)';e.stage1By='Orsted Head of Tax';e.stage1Reason='Substitution is genuinely fettered and control is finely balanced; referring to external tax counsel for a definitive view before any SDS issues.';e.slaDue=addDays(NOW,5);}
+ const e=DB.reviewFor('AS-2322');if(e&&e.stage===1){e.stage=2;e.status='Escalated — awaiting external';e.assignedTo='{{ADVISER_NAME}} (external adviser)';e.stage1By='{{INTERNAL_REVIEWER}}';e.stage1Reason='Substitution is genuinely fettered and control is finely balanced; referring to external tax counsel for a definitive view before any SDS issues.';e.slaDue=addDays(NOW,5);}
  DB.save();
 }
 let RESP_LOCK=null;
@@ -914,24 +956,145 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
  async function hydrateAndStart(){
   var tries=0;while(!(window.supabase&&window.supabase.createClient)&&tries<60){await new Promise(function(r){setTimeout(r,100);});tries++;}
   if(!(window.supabase&&window.supabase.createClient)){fatal('Could not load the secure-store library. Check your internet connection and reload the page.');return;}
-  try{window.__sb=window.supabase.createClient(WB.SUPABASE_URL,WB.SUPABASE_ANON_KEY);}catch(e){fatal('Store configuration error. Please contact Aaron.');return;}
+  try{if(!window.__sb)window.__sb=window.supabase.createClient(WB.SUPABASE_URL,WB.SUPABASE_ANON_KEY);}catch(e){fatal('Store configuration error. Please contact Aaron.');return;}
   try{await DB.loadAsync();}catch(e){console.error('WB load failed',e);
    if(e&&e.__noTenantRow){fatal('You are signed in, but no secure store exists yet for '+esc(TENANT.name)+'. This is an onboarding step, not a fault with your account — contact Aaron so the tenant store can be provisioned. <b>Nothing has been created or overwritten.</b>');}
-   else{fatal('Could not reach the '+esc(TENANT.name)+' secure store (London). Check your connection and reload the page.');}
+   else{fatal('You are signed in, but the '+esc(TENANT.name)+' secure store (London) refused the request. If you have only just been added, your access may not be active yet — contact Aaron. Otherwise check your connection and reload.');}
    return;}
   saveFlagInit();
   var b=document.getElementById('wbBanner');if(b)b.textContent=TENANT.name+' — client-confidential. Off-payroll status determinations. Decision-support, not legal advice.';
-  buildLoginUI();
+  buildLoginUI();var _ls=document.getElementById('loginScreen');if(_ls)_ls.style.display='none';enterAsAuthedUser();
  }
- function gate(){
-  var ov=el('div','position:fixed;inset:0;z-index:450;background:linear-gradient(135deg,#0C365F,#001E5A);display:flex;align-items:center;justify-content:center;padding:24px;font-family:Mulish,sans-serif');
-  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:400px;width:100%;padding:30px;box-shadow:0 30px 80px rgba(0,0,0,.4)"><h2 style="font-size:18px;margin-bottom:4px">IR35 Workbench</h2><div style="color:#6b7280;font-size:13px;margin-bottom:16px">Client-confidential. Enter your access code to continue.</div><input id="wbGateCode" type="password" placeholder="Access code" autocomplete="off" style="width:100%;padding:11px 12px;border:1px solid #DBDBDB;border-radius:9px;font-size:14px;font-family:inherit"><div id="wbGateErr" style="color:#9C2373;font-size:12px;font-weight:700;margin-top:8px;min-height:15px"></div><button id="wbGateBtn" style="width:100%;margin-top:10px;padding:11px;border:0;border-radius:9px;background:#218380;color:#fff;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit">Enter</button></div>';
-  document.body.appendChild(ov);
-  var inp=document.getElementById('wbGateCode'),btn=document.getElementById('wbGateBtn'),err=document.getElementById('wbGateErr');
-  function submit(){if((inp.value||'')===WB.ACCESS_CODE){ov.remove();hydrateAndStart();}else{err.textContent='Incorrect code.';inp.value='';inp.focus();}}
-  btn.onclick=submit;inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();submit();}});setTimeout(function(){inp.focus();},80);
+ /* ---- Per-user authentication (Supabase Auth: email + password + TOTP MFA) ---- */
+ var ROLE_MAP={platform:'platform',clientadmin:'clientadmin',linemanager:'linemanager',internalreviewer:'internalreviewer',reviewer:'reviewer',contractor:'contractor'};
+ async function enterAsAuthedUser(){
+  var user=null;try{var r=await window.__sb.auth.getUser();user=r&&r.data?r.data.user:null;}catch(e){}
+  if(!user){fatal('Your session could not be read. Please reload and sign in again.');return;}
+  var meta=user.app_metadata||{};var roleKey=ROLE_MAP[meta.role]||null;
+  if(!roleKey||!USERS[roleKey]){fatal('You are signed in, but your account has no Workbench role assigned yet. Contact Aaron to be authorised.');return;}
+  CURRENT_USER=Object.assign({},USERS[roleKey]);
+  CURRENT_USER.name=(user.user_metadata&&user.user_metadata.full_name)||meta.full_name||user.email;
+  CURRENT_USER.email=user.email;
+  if(roleKey!=='platform'&&meta.tenant)CURRENT_USER.tenant=TENANT.name;
+  if(roleKey==='contractor'&&meta.worker_ref)CURRENT_USER.workerRef=meta.worker_ref;
+  var ls=document.getElementById('loginScreen');if(ls)ls.style.display='none';
+  renderNav();go(defaultTab(CURRENT_USER.role));
  }
- gate();
+ function abody(){return document.getElementById('wbAuthBody');}
+ function aerr(m){var e=document.getElementById('wbAuthErr');if(e)e.textContent=m||'';}
+ function afield(id,type,ph){return '<input id="'+id+'" type="'+type+'" placeholder="'+ph+'" autocomplete="'+(type==='password'?'current-password':(type==='email'?'username':'off'))+'" style="width:100%;padding:11px 12px;border:1px solid #DBDBDB;border-radius:9px;font-size:14px;font-family:inherit;margin-bottom:8px">';}
+ function abtn(id,label){return '<button id="'+id+'" style="width:100%;margin-top:4px;padding:11px;border:0;border-radius:9px;background:#218380;color:#fff;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit">'+label+'</button>';}
+ function aerrline(){return '<div id="wbAuthErr" style="color:#9C2373;font-size:12px;font-weight:700;margin-top:8px;min-height:15px"></div>';}
+ function authScreen(){
+  var ov=el('div','position:fixed;inset:0;z-index:450;background:linear-gradient(135deg,#0C365F,#001E5A);display:flex;align-items:center;justify-content:center;padding:24px;font-family:Mulish,sans-serif');ov.id='wbAuth';
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:400px;width:100%;padding:30px;box-shadow:0 30px 80px rgba(0,0,0,.4)"><img src="Ascend_Logo_Colour.svg" alt="Ascend" style="height:28px;margin-bottom:12px"><h2 style="font-size:18px;margin-bottom:4px">IR35 Workbench — '+esc(TENANT.name)+'</h2><div style="color:#6b7280;font-size:13px;margin-bottom:16px">Client-confidential. Sign in with your account.</div><div id="wbAuthBody"></div></div>';
+  document.body.appendChild(ov);showPassword();
+ }
+ var GOOGLE_SVG='<svg width="17" height="17" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18c-.44-1.32-.69-2.73-.69-4.18s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>';
+ var APPLE_SVG='<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="#9ca3af"><path d="M16.36 12.78c-.02-2.02 1.65-2.99 1.72-3.04-.94-1.37-2.4-1.56-2.92-1.58-1.24-.13-2.42.73-3.05.73-.63 0-1.6-.71-2.63-.69-1.35.02-2.6.79-3.29 2-1.4 2.43-.36 6.02 1.01 7.99.67.96 1.47 2.04 2.52 2 1.01-.04 1.39-.65 2.62-.65 1.22 0 1.57.65 2.63.63 1.09-.02 1.78-.98 2.45-1.95.77-1.12 1.09-2.2 1.11-2.26-.02-.01-2.13-.82-2.15-3.24zM14.5 6.6c.56-.68.94-1.62.83-2.56-.81.03-1.79.54-2.37 1.21-.52.6-.97 1.56-.85 2.48.9.07 1.83-.46 2.39-1.13z"/></svg>';
+ function asocialBtns(){
+  return '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px;color:#9ca3af;font-size:11px;font-weight:700"><div style="flex:1;height:1px;background:#e5e7eb"></div>OR<div style="flex:1;height:1px;background:#e5e7eb"></div></div>'
+   +'<button id="wbGoogle" style="width:100%;margin-top:0;padding:10px;border:1px solid #DBDBDB;border-radius:9px;background:#fff;color:#3c4043;font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:9px">'+GOOGLE_SVG+'Sign in with Google</button>'
+   +'<button id="wbApple" disabled title="Apple sign-in is coming soon" style="width:100%;margin-top:8px;padding:10px;border:1px solid #e5e7eb;border-radius:9px;background:#f3f4f6;color:#9ca3af;font-weight:600;font-size:14px;cursor:not-allowed;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:9px">'+APPLE_SVG+'Sign in with Apple — coming soon</button>'
+   +'<div style="font-size:11px;color:#9ca3af;margin-top:11px;line-height:1.45">'+esc(TENANT.name)+' staff: sign in with your email and password. Social sign-in is for contractor self-service.</div>';
+ }
+ function showPassword(){
+  abody().innerHTML=afield('wbEmail','email','Email')+afield('wbPass','password','Password')+aerrline()+abtn('wbSignIn','Sign in')+asocialBtns();
+  document.getElementById('wbSignIn').onclick=doPassword;
+  document.getElementById('wbPass').addEventListener('keydown',function(e){if(e.key==='Enter')doPassword();});
+  var g=document.getElementById('wbGoogle');if(g)g.onclick=doGoogle;
+  setTimeout(function(){var x=document.getElementById('wbEmail');if(x)x.focus();},80);
+  if(typeof OAUTH_ERR!=='undefined'&&OAUTH_ERR){aerr(OAUTH_ERR);OAUTH_ERR='';}
+ }
+ async function doGoogle(){
+  aerr('');var g=document.getElementById('wbGoogle');if(g){g.disabled=true;g.style.opacity='.6';}
+  try{
+   var r=await window.__sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}});
+   if(r&&r.error){aerr(r.error.message||'Google sign-in is not available yet — please use your email and password.');if(g){g.disabled=false;g.style.opacity='1';}}
+  }catch(e){aerr('Google sign-in is not available yet — please use your email and password.');if(g){g.disabled=false;g.style.opacity='1';}}
+ }
+ async function doPassword(){
+  aerr('');var email=(document.getElementById('wbEmail').value||'').trim();var pass=document.getElementById('wbPass').value||'';
+  if(!email||!pass){aerr('Enter your email and password.');return;}
+  var b=document.getElementById('wbSignIn');b.disabled=true;b.textContent='Signing in…';
+  var r=await window.__sb.auth.signInWithPassword({email:email,password:pass});
+  b.disabled=false;b.textContent='Sign in';
+  if(r.error){aerr(r.error.message||'Sign-in failed.');return;}
+  await afterPassword();
+ }
+ async function afterPassword(){
+  var aal=await window.__sb.auth.mfa.getAuthenticatorAssuranceLevel();
+  var cur=aal&&aal.data?aal.data.currentLevel:null,nxt=aal&&aal.data?aal.data.nextLevel:null;
+  if(cur==='aal2'){finishAuth();return;}
+  if(nxt==='aal2'){
+   var f=await window.__sb.auth.mfa.listFactors();
+   var totp=f&&f.data&&f.data.totp&&f.data.totp.length?f.data.totp[0]:null;
+   if(totp){showChallenge(totp.id);}else{showEnroll();}
+  }else{showEnroll();}
+ }
+ function finishAuth(){var ov=document.getElementById('wbAuth');if(ov)ov.remove();hydrateAndStart();}
+ async function showEnroll(){
+  abody().innerHTML='<div style="font-size:13px;color:#333;margin-bottom:10px">Set up two-factor authentication. Scan this with an authenticator app (Microsoft/Google Authenticator, 1Password…), then enter the 6-digit code.</div><div id="wbQR" style="text-align:center;margin-bottom:10px;min-height:180px"></div>'+afield('wbCode','text','6-digit code')+aerrline()+abtn('wbVerify','Verify & continue');
+  var en=await window.__sb.auth.mfa.enroll({factorType:'totp'});
+  if(en.error){aerr(en.error.message||'Could not start MFA setup.');return;}
+  var fid=en.data.id;var qr=en.data.totp&&en.data.totp.qr_code;
+  if(qr){document.getElementById('wbQR').innerHTML='<img alt="QR" style="width:180px;height:180px" src="'+qr+'">';}
+  document.getElementById('wbVerify').onclick=function(){verifyFactor(fid);};
+  document.getElementById('wbCode').addEventListener('keydown',function(e){if(e.key==='Enter')verifyFactor(fid);});
+ }
+ async function showChallenge(fid){
+  abody().innerHTML='<div style="font-size:13px;color:#333;margin-bottom:10px">Enter the 6-digit code from your authenticator app.</div>'+afield('wbCode','text','6-digit code')+aerrline()+abtn('wbVerify','Verify & continue');
+  document.getElementById('wbVerify').onclick=function(){verifyFactor(fid);};
+  document.getElementById('wbCode').addEventListener('keydown',function(e){if(e.key==='Enter')verifyFactor(fid);});
+  setTimeout(function(){var x=document.getElementById('wbCode');if(x)x.focus();},80);
+ }
+ async function verifyFactor(fid){
+  aerr('');var code=(document.getElementById('wbCode').value||'').trim();if(!/^[0-9]{6}$/.test(code)){aerr('Enter the 6-digit code.');return;}
+  var v=document.getElementById('wbVerify');v.disabled=true;v.textContent='Verifying…';
+  var ch=await window.__sb.auth.mfa.challenge({factorId:fid});
+  if(ch.error){v.disabled=false;v.textContent='Verify & continue';aerr(ch.error.message);return;}
+  var res=await window.__sb.auth.mfa.verify({factorId:fid,challengeId:ch.data.id,code:code});
+  v.disabled=false;v.textContent='Verify & continue';
+  if(res.error){aerr(res.error.message||'Incorrect code.');return;}
+  finishAuth();
+ }
+ /* First-time onboarding (invite / password reset): set a password, then MFA. */
+ function showSetPassword(){
+  abody().innerHTML='<div style="font-size:13px;color:#333;margin-bottom:10px">Welcome. Set a password for your Workbench account to continue.</div>'+afield('wbNewPass','password','New password (min 8 characters)')+afield('wbNewPass2','password','Confirm password')+aerrline()+abtn('wbSetPw','Set password & continue');
+  document.getElementById('wbSetPw').onclick=doSetPassword;
+  document.getElementById('wbNewPass2').addEventListener('keydown',function(e){if(e.key==='Enter')doSetPassword();});
+  setTimeout(function(){var x=document.getElementById('wbNewPass');if(x)x.focus();},80);
+ }
+ async function doSetPassword(){
+  aerr('');var p1=document.getElementById('wbNewPass').value||'';var p2=document.getElementById('wbNewPass2').value||'';
+  if(p1.length<8){aerr('Password must be at least 8 characters.');return;}
+  if(p1!==p2){aerr('Passwords do not match.');return;}
+  var b=document.getElementById('wbSetPw');b.disabled=true;b.textContent='Saving…';
+  var r=await window.__sb.auth.updateUser({password:p1});
+  b.disabled=false;b.textContent='Set password & continue';
+  if(r.error){aerr(r.error.message||'Could not set password.');return;}
+  await afterPassword();
+ }
+ /* entry: handle invite/reset, else resume an aal2 session, else show sign-in */
+ var INVITE_FLOW = /type=(invite|recovery)/.test((window.location.hash||'')+(window.location.search||''));
+ /* Surface an OAuth error handed back on the redirect (e.g. sign-ups off, provider not enabled) */
+ var OAUTH_ERR='';try{var _h=(window.location.hash||'')+'&'+(window.location.search||'');var _m=_h.match(/error_description=([^&]+)/);if(_m){OAUTH_ERR=decodeURIComponent(_m[1].replace(/\+/g,' '));}else if(/[?#&]error=/.test(_h)){OAUTH_ERR='Google sign-in is not available yet — please use your email and password.';}}catch(e){}
+ (function boot(){
+  var tries=0;(function wait(){
+   if(window.supabase&&window.supabase.createClient){
+    try{if(!window.__sb)window.__sb=window.supabase.createClient(WB.SUPABASE_URL,WB.SUPABASE_ANON_KEY);}catch(e){fatal('Store configuration error. Please contact Aaron.');return;}
+    (async function(){
+     try{var s=await window.__sb.auth.getSession();var sess=s&&s.data?s.data.session:null;
+      if(INVITE_FLOW&&sess){authScreen();showSetPassword();return;}
+      if(sess){var aal=await window.__sb.auth.mfa.getAuthenticatorAssuranceLevel();
+       if(aal&&aal.data&&aal.data.currentLevel==='aal2'){hydrateAndStart();return;}
+       authScreen();await afterPassword();return;}
+     }catch(e){}
+     authScreen();
+    })();
+   }else if(tries++<60){setTimeout(wait,100);}else{fatal('Could not load the secure sign-in library. Check your internet connection and reload the page.');}
+  })();
+ })();
 })();
 
 
@@ -1108,7 +1271,7 @@ function commitContractorSubmission(){
   if(!DB.reviewFor(ref)){
    DB.s.reviews.push({tenantId:TENANT.id,workerRef:ref,reason:'Contractor input changed the outcome',
     raisedAt:NOW+' '+new Date().toTimeString().slice(0,5),
-    assignedTo:'Orsted Head of Tax (internal senior reviewer)',status:'Awaiting internal review',
+    assignedTo:'{{INTERNAL_REVIEWER}} (internal senior reviewer)',status:'Awaiting internal review',
     slaDue:addDays(NOW,5),rulesetVersion:RULESET_VERSION,stage:1,decision:null,reasoning:''});
   }
   DB.save();

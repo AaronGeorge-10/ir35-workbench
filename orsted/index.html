@@ -1,10 +1,13 @@
+<!-- GENERATED FILE - DO NOT EDIT.
+     Source: src/workbench.html + clients/orsted.json
+     Rebuild: python3 build.py orsted -->
 <!doctype html><html lang="en-GB"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>IR35 Workbench — Ascend Workforce Solutions</title>
 <script>
 /* Per-client config — injected at deploy time (each client instance = its own isolated store) */
-window.WB={CLIENT_ID:'orsted',TENANT_NAME:'Ørsted',SUPABASE_URL:'https://feevwggvgnhtikotixih.supabase.co',SUPABASE_ANON_KEY:'sb_publishable_t-RArBm4EJMADyNo62ZsXA_GQIwdd0K',ACCESS_CODE:'Orsted-IR35-575F5D'};
+window.WB={CLIENT_ID:'orsted',TENANT_NAME:'Ørsted',TENANT_SHORT:'Orsted',SECTOR:'Renewable energy',ADVISER_NAME:'Bauer & Cottrell',INTERNAL_REVIEWER:'Orsted Head of Tax',SUPABASE_URL:'https://feevwggvgnhtikotixih.supabase.co',SUPABASE_ANON_KEY:'sb_publishable_t-RArBm4EJMADyNo62ZsXA_GQIwdd0K',ANALYZER_URL:'https://ir35-contract-analyzer.onrender.com'};
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -282,6 +285,11 @@ window.WB={CLIENT_ID:'orsted',TENANT_NAME:'Ørsted',SUPABASE_URL:'https://feevwg
  </div>
 </section>
 
+<section class="view" id="analyser"><div class="card"><h2>Contract Analyser</h2>
+<p class="lead">Upload a written contract (Word, PDF or text). The analyser returns a clause-cited IR35 <b>risk assessment</b> across 28 factors. It flags contract risk — it does not issue a Status Determination.</p>
+<div style="margin-top:12px"><input type="file" id="caFile" accept=".docx,.pdf,.txt"> <button class="btn" onclick="runAnalyser()">Analyse contract</button></div>
+<div id="caProg" class="small" style="margin-top:10px;display:none"></div></div>
+<div id="caResult"></div></section>
 <section class="view" id="guides"><div id="guidesBody"></div></section>
 </main>
 <div id="sdsOverlay"></div>
@@ -739,14 +747,14 @@ function closeSDS(){const ov=document.getElementById('sdsOverlay');ov.classList.
 
 /* ============================== AUTH / RBAC + TWO-STAGE REVIEW (demonstration access) ============================== */
 const ROLE_TABS={
- platform:['dash','assess','jd','library','register','review','reviews','audit','guides'],
- clientadmin:['dash','assess','jd','library','register','review','reviews','audit','guides'],
+ platform:['dash','assess','jd','library','register','review','reviews','audit','analyser','guides'],
+ clientadmin:['dash','assess','jd','library','register','review','reviews','audit','analyser','guides'],
  linemanager:['dash','assess','jd','library','register','reviews','audit','guides'],
  internalreviewer:['review','register','audit','guides'],
  reviewer:['review','audit','guides'],
  contractor:['mine','assess','guides']
 };
-const NAVLABEL={dash:'Reporting Dashboard',assess:'New Assessment',jd:'JD Analyser',library:'Role Library',register:'Worker Register',review:'Review Queue',reviews:'SDS Reviews',audit:'Audit & Disputes',mine:'My IR35 status',guides:'Guides'};
+const NAVLABEL={dash:'Reporting Dashboard',assess:'New Assessment',jd:'JD Analyser',library:'Role Library',register:'Worker Register',review:'Review Queue',reviews:'SDS Reviews',audit:'Audit & Disputes',analyser:'Contract Analyser',mine:'My IR35 status',guides:'Guides'};
 const USERS={
  platform:{role:'platform',name:'Aaron George',title:'Ascend Platform Admin',tenant:'All tenants'},
  clientadmin:{role:'clientadmin',name:'Orsted IR35 Administrator',title:'Client Administrator',tenant:'Orsted'},
@@ -824,9 +832,46 @@ function go(id){
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.v===id));
  if(id==='assess'){wireAssess();var _lock=CURRENT_USER.role==='contractor'?'contractor':(CURRENT_USER.role==='linemanager'?'client':null);applyRespLock(_lock);if(CURRENT_USER.role==='contractor'){const aw=document.getElementById('aWorker');if(aw){aw.value=CURRENT_USER.name;aw.readOnly=true;}const w=DB.worker(CURRENT_USER.workerRef);const ar=document.getElementById('aRole');if(ar&&w){ar.value=w.role;ar.readOnly=true;}}}
  else if(id==='register'){renderRegister();if(CURRENT_USER.role==='linemanager')injectLMFilter();}
- else {({dash:renderDashboard,jd:initJD,library:renderLibrary,review:renderReview,reviews:renderReviews,audit:renderAudit,mine:renderMine,guides:renderGuides}[id]||function(){})();}
+ else {({dash:renderDashboard,jd:initJD,library:renderLibrary,review:renderReview,reviews:renderReviews,audit:renderAudit,analyser:initAnalyser,mine:renderMine,guides:renderGuides}[id]||function(){})();}
  window.scrollTo(0,0);
 }
+function initAnalyser(){}
+function caEsc(s){return (s==null?'':String(s)).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+async function runAnalyser(){
+ var f=document.getElementById('caFile'),prog=document.getElementById('caProg'),res=document.getElementById('caResult');
+ res.innerHTML='';prog.style.display='block';
+ if(!f||!f.files||!f.files[0]){prog.textContent='Choose a contract file first.';return;}
+ var token='';try{var s=await window.__sb.auth.getSession();token=(s&&s.data&&s.data.session)?s.data.session.access_token:'';}catch(e){}
+ var fd=new FormData();fd.append('file',f.files[0]);fd.append('contract_id',f.files[0].name);
+ prog.textContent='Uploading and starting analysis…';
+ var job;
+ try{var r=await fetch(WB.ANALYZER_URL+'/analyze',{method:'POST',headers:token?{'Authorization':'Bearer '+token}:{},body:fd});job=await r.json();if(!r.ok||!job.job_id){throw new Error(job.detail||('HTTP '+r.status));}}
+ catch(e){prog.textContent='Could not start analysis: '+e.message;return;}
+ var total=job.total||28;
+ var poll=setInterval(function(){
+  fetch(WB.ANALYZER_URL+'/analyze/'+job.job_id).then(function(pr){return pr.json();}).then(function(p){
+   if(p.status==='running'){prog.textContent='Grading factor '+(p.progress||0)+'/'+(p.total||total)+'… (a full contract takes a couple of minutes)';return;}
+   clearInterval(poll);
+   if(p.status==='error'){prog.textContent='Analysis failed: '+(p.error||'unknown error');return;}
+   prog.style.display='none';renderContractAssessment(p.assessment);
+  }).catch(function(e){});
+ },4000);
+}
+function renderContractAssessment(a){
+ if(!a){document.getElementById('caResult').innerHTML='<div class="card">No assessment returned.</div>';return;}
+ var r=a.overall_rating,bcol=r==='COMPLIANT'?'#1a9c5b':(r==='INSIDE'?'#c0392b':'#c9860a');
+ var h='<div class="card"><div style="border-radius:8px;padding:14px 16px;color:#fff;font-weight:700;background:'+bcol+'">'+caEsc(a.overall_label)+' — '+caEsc(a.contract_id)+'<div style="font-weight:500;font-size:12px;margin-top:4px;opacity:.95">'+caEsc(a.executive_summary)+'</div></div>';
+ if(a.qa&&a.qa.needs_human_qa){h+='<div style="margin-top:12px;border-left:4px solid #c9860a;background:#fdf3e0;padding:10px 12px;border-radius:6px;font-size:12.5px"><b>Routed to Ascend QA before use.</b> '+caEsc((a.qa.reasons||[]).join('; '))+'</div>';}
+ h+='</div>';
+ if(a.recommended_actions&&a.recommended_actions.length){h+='<div class="card"><h3><span class="dot"></span>Recommended actions</h3><ul>'+a.recommended_actions.map(function(x){return '<li>'+caEsc(x)+'</li>';}).join('')+'</ul></div>';}
+ h+='<div class="card"><h3><span class="dot"></span>Factor grid — 28 tests</h3><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left">Factor</th><th>Band</th><th>Grade</th><th style="text-align:left">Cited clause / quote</th></tr></thead><tbody>';
+ h+=(a.factor_grid||[]).map(function(g){var gc=g.grade==='GREEN'?'#1a9c5b':(g.grade==='RED'?'#c0392b':(g.grade==='AMBER'?'#c9860a':'#5b7085'));return '<tr><td style="border-top:1px solid #eee"><b>'+caEsc(g.factor)+'</b> '+caEsc(g.name)+'</td><td style="border-top:1px solid #eee;text-align:center">'+caEsc(g.band)+'</td><td style="border-top:1px solid #eee;text-align:center;color:'+gc+';font-weight:700">'+caEsc(g.grade)+'</td><td style="border-top:1px solid #eee;color:#5b7085">'+(g.quote?('“'+caEsc(String(g.quote).slice(0,160))+'”'):'—')+'</td></tr>';}).join('');
+ h+='</tbody></table></div>';
+ var b=a.basis||{};
+ h+='<div class="card"><div style="font-size:11.5px;color:#5b7085"><b>'+caEsc(b.caveat||'')+'</b><br>Model '+caEsc(b.model_version||'')+' · prompt '+caEsc(b.prompt_version||'')+' · rubric '+caEsc(b.rubric_version||'')+'</div></div>';
+ document.getElementById('caResult').innerHTML=h;
+}
+
 function renderGuides(){var contractor=CURRENT_USER&&CURRENT_USER.role==='contractor';var G=[];if(!contractor){G.push({t:'Hirer guide',d:'For contract managers and line managers \u2014 signing in, the tabs, assessing roles and workers, issuing an SDS, and reasonable care.',f:'guides/Ascend_IR35_Workbench_Hirer_Guide.pdf'});}G.push({t:'Contractor guide',d:'For contractors completing their own questionnaire \u2014 what to have ready, how to answer, and what happens next.',f:'guides/Ascend_IR35_Workbench_Contractor_Guide.pdf'});var h='<h2>Guides</h2><p class="lead">Short PDF guides to using the IR35 Workbench. They open in a new tab.</p><div class="grid2">';h+=G.map(function(g){return '<div class="card"><h3><span class="dot"></span>'+g.t+'</h3><p class="small">'+g.d+'</p><div style="margin-top:10px"><a class="btn" href="'+g.f+'" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">Open guide (PDF) &rarr;</a></div></div>';}).join('');h+='</div>';document.getElementById('guidesBody').innerHTML=h;}
 function injectLMFilter(){const tb=document.querySelector('#register .toolbar');if(!tb||document.getElementById('lmMine'))return;const lbl=document.createElement('label');lbl.style.cssText='display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--navy)';lbl.innerHTML='<input type="checkbox" id="lmMine" onchange="renderRegister()"> My workers only';tb.insertBefore(lbl,document.getElementById('regCount'));}
 function renderMine(){
@@ -922,14 +967,6 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
   saveFlagInit();
   var b=document.getElementById('wbBanner');if(b)b.textContent=TENANT.name+' — client-confidential. Off-payroll status determinations. Decision-support, not legal advice.';
   buildLoginUI();var _ls=document.getElementById('loginScreen');if(_ls)_ls.style.display='none';enterAsAuthedUser();
- }
- function gate(){
-  var ov=el('div','position:fixed;inset:0;z-index:450;background:linear-gradient(135deg,#0C365F,#001E5A);display:flex;align-items:center;justify-content:center;padding:24px;font-family:Mulish,sans-serif');
-  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:400px;width:100%;padding:30px;box-shadow:0 30px 80px rgba(0,0,0,.4)"><h2 style="font-size:18px;margin-bottom:4px">IR35 Workbench</h2><div style="color:#6b7280;font-size:13px;margin-bottom:16px">Client-confidential. Enter your access code to continue.</div><input id="wbGateCode" type="password" placeholder="Access code" autocomplete="off" style="width:100%;padding:11px 12px;border:1px solid #DBDBDB;border-radius:9px;font-size:14px;font-family:inherit"><div id="wbGateErr" style="color:#9C2373;font-size:12px;font-weight:700;margin-top:8px;min-height:15px"></div><button id="wbGateBtn" style="width:100%;margin-top:10px;padding:11px;border:0;border-radius:9px;background:#218380;color:#fff;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit">Enter</button></div>';
-  document.body.appendChild(ov);
-  var inp=document.getElementById('wbGateCode'),btn=document.getElementById('wbGateBtn'),err=document.getElementById('wbGateErr');
-  function submit(){if((inp.value||'')===WB.ACCESS_CODE){ov.remove();hydrateAndStart();}else{err.textContent='Incorrect code.';inp.value='';inp.focus();}}
-  btn.onclick=submit;inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();submit();}});setTimeout(function(){inp.focus();},80);
  }
  /* ---- Per-user authentication (Supabase Auth: email + password + TOTP MFA) ---- */
  var ROLE_MAP={platform:'platform',clientadmin:'clientadmin',linemanager:'linemanager',internalreviewer:'internalreviewer',reviewer:'reviewer',contractor:'contractor'};

@@ -1,0 +1,22 @@
+{
+  "_comment": "TEMPLATE for onboarding a new client. Copy to clients/<client>.json, fill every value, then run: python3 build.py <client>. Leading underscore = ignored by the builder.",
+  "_checklist": [
+    "1. Create a NEW Supabase project in London (eu-west-2). One project per client = physical isolation. Never share a project.",
+    "2. Run the schema + RLS migrations against it (tenant_state, roles, role_assessments, role_documents, contract_analysis).",
+    "3. Confirm Auth > Providers > sign-ups are DISABLED, and email confirmations are on.",
+    "4. Confirm Auth > URL Configuration Site URL is https://ir35workbench.co.uk/<folder>/ and the redirect allow-list covers it.",
+    "5. Fill this file in, run the build, commit, and wait for the GitHub Pages deploy.",
+    "6. Provision users admin-side and set app_metadata.tenant to CLIENT_ID for every one of them.",
+    "7. Run the isolation self-test (register G-04) BEFORE giving the client the URL: sign in as this client and prove you cannot read another client's store."
+  ],
+  "folder": "acme",
+  "CLIENT_ID": "acme",
+  "TENANT_NAME": "ACME Group plc",
+  "TENANT_SHORT": "ACME",
+  "SECTOR": "Sector shown on the dashboard, e.g. Renewable energy",
+  "ADVISER_NAME": "Bauer & Cottrell",
+  "INTERNAL_REVIEWER": "ACME Head of Tax",
+  "SUPABASE_URL": "https://<project-ref>.supabase.co",
+  "SUPABASE_ANON_KEY": "sb_publishable_...",
+  "ANALYZER_URL": "https://ir35-contract-analyzer.onrender.com"
+}
