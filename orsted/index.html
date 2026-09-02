@@ -715,14 +715,48 @@ function renderAudit(){
 }
 
 /* ============================== SDS MODAL ============================== */
+/* --- SDS answer rendering (debt register B-05) ------------------------------
+   An unanswered question and a question genuinely answered "None of these apply"
+   used to render identically, because the sentinel option is filtered out before
+   the empty-list fallback fires. On a hirer-issued SDS that printed a false
+   statement of fact about the contractor. These two helpers keep the three states
+   distinct: unanswered, features selected, sentinel selected. */
+function sdsUnanswered(it){
+ if(it.q.multi)return !(Array.isArray(it.ans)&&it.ans.length);
+ return it.ans===undefined||it.ans===null||it.ans==='';
+}
+function sdsAnswerText(it){
+ if(sdsUnanswered(it))return it.q.resp==='contractor'
+  ?'Not yet supplied by the contractor — scored neutral'
+  :'Not answered — scored neutral';
+ if(it.q.multi){
+  var feats=it.ans.filter(function(i){return i<it.q.featCount;}).map(function(i){return it.q.opts[i][0];});
+  if(feats.length)return feats.join(', ');
+  return it.q.opts[it.q.featCount]?it.q.opts[it.q.featCount][0]:'None of these apply';
+ }
+ return it.q.opts[it.ans]?it.q.opts[it.ans][0]:'';
+}
+function sdsAnswerTag(it){
+ if(sdsUnanswered(it))return it.q.resp==='contractor'
+  ?'<span class="sds-tag neu">AWAITING CONTRACTOR</span>'
+  :'<span class="sds-tag neu">NOT ANSWERED</span>';
+ var v=it.val;
+ return v>0?'<span class="sds-tag pos">SUPPORTS OUTSIDE</span>'
+  :v<0?'<span class="sds-tag att">ATTENTION</span>'
+  :'<span class="sds-tag neu">NEUTRAL</span>';
+}
 function openSDS(ref){if(CURRENT_USER&&CURRENT_USER.role==='contractor'&&ref!==CURRENT_USER.workerRef){alert('You can only view your own SDS.');return;}
  const w=DB.worker(ref),sds=DB.sdsFor(ref);if(!w||!sds){alert('SDS not found.');return;}
  const review=DB.reviewFor(ref);const vm={out:['out','OUTSIDE IR35'],in:['in','INSIDE IR35']}[w.outcome]||['border','BORDERLINE'];
  let reasons='';
  if(w.full&&w.answers){const d=assess(w.answers);const groups={};d.items.forEach(it=>{if(it.q.band==='context')return;(groups[it.q.grp]=groups[it.q.grp]||[]).push(it);});
-  Object.keys(groups).forEach(g=>{reasons+='<h2>'+g+'</h2>'+groups[g].map(it=>{const v=it.val;const tag=it.q.band==='override'?(v<=-99?'<span class="sds-tag att">INSIDE (STATUTORY)</span>':''):(v>0?'<span class="sds-tag pos">SUPPORTS OUTSIDE</span>':v<0?'<span class="sds-tag att">ATTENTION</span>':'<span class="sds-tag neu">NEUTRAL</span>');const ansTxt=it.q.multi?((Array.isArray(it.ans)?it.ans:[]).filter(i=>i<it.q.featCount).map(i=>it.q.opts[i][0]).join(', ')||'None of these apply'):(it.q.opts[it.ans]?it.q.opts[it.ans][0]:'');return '<div class="sds-q">'+tag+esc(it.q.code+' — '+it.q.t.replace(/[—].*$/,'').trim())+': <span class="a">'+esc(ansTxt)+'</span></div>';}).join('');});}
+  Object.keys(groups).forEach(g=>{reasons+='<h2>'+g+'</h2>'+groups[g].map(it=>{const v=it.val;const tag=it.q.band==='override'?(v<=-99?'<span class="sds-tag att">INSIDE (STATUTORY)</span>':''):sdsAnswerTag(it);const ansTxt=sdsAnswerText(it);return '<div class="sds-q">'+tag+esc(it.q.code+' — '+it.q.t.replace(/[—].*$/,'').trim())+': <span class="a">'+esc(ansTxt)+'</span></div>';}).join('');});}
  else{const canned={out:[['SUPPORTS OUTSIDE','Genuine right of substitution the client cannot unreasonably refuse.'],['SUPPORTS OUTSIDE','Worker controls their own methods, hours and location.'],['SUPPORTS OUTSIDE','No mutuality — engaged for a defined deliverable.'],['SUPPORTS OUTSIDE','Carries financial risk; own equipment; works for other clients.']],in:[['ATTENTION','Work must be carried out personally; no genuine substitution.'],['ATTENTION','Client directs how, when and where the work is done.'],['ATTENTION','Ongoing mutuality of obligation; paid in downtime.'],['ATTENTION','Integrated into the client organisation.']]}[w.outcome]||[['NEUTRAL','Mixed indicators across the key tests; referred for review.']];
   reasons='<h2>Summary of reasons</h2>'+canned.map(c=>'<div class="sds-q"><span class="sds-tag '+(c[0]==='SUPPORTS OUTSIDE'?'pos':c[0]==='ATTENTION'?'att':'neu')+'">'+c[0]+'</span>'+esc(c[1])+'</div>').join('');}
+ var _rvReason=(sds&&sds.reviewerReasoning)||(review&&review.reviewerReasoning)||(review&&review.reasoning)||'';
+ var _rvBy=(sds&&sds.signedOffBy)||(review&&review.signedOffBy)||(sds&&sds.reviewer)||'';
+ var _rvAt=(sds&&sds.signedOffAt)||(review&&review.signedOffAt)||'';
+ var reviewerBlock=_rvReason?'<div class="sds-statement"><b>Expert review (qualified IR35 specialist):</b> '+esc(_rvReason)+(_rvBy?' — '+esc(_rvBy):'')+(_rvAt?', '+esc(_rvAt):'')+'</div>':'';
  let ev='';const evk=Object.keys(w.evidence||{});if(evk.length){ev='<h2>Evidence recorded</h2>'+evk.map(id=>{const q=RULESET.find(x=>x.id===id);return '<div class="sds-q"><b>'+esc(q?q.t.replace(/[—].*$/,'').trim():id)+':</b> '+esc(w.evidence[id])+'</div>';}).join('');}
  
  const html='<div class="sds"><div class="sds-toolbar"><button class="btn sec" onclick="closeSDS()">Close</button><button class="btn" onclick="window.print()">Print / Save PDF</button></div><div class="sds-body">'+
@@ -730,7 +764,7 @@ function openSDS(ref){if(CURRENT_USER&&CURRENT_USER.role==='contractor'&&ref!==C
   '<h1>Status Determination Statement</h1><p class="small">Issued under the off-payroll working rules (Chapter 10, Part 2 ITEPA 2003).</p>'+
   '<div class="meta"><div><b>Worker / PSC</b>'+esc(w.worker)+'</div><div><b>Role / assignment</b>'+esc(w.role)+'</div><div><b>End-hirer (client)</b>'+esc(TENANT.name)+'</div><div><b>SDS reference</b>'+sds.ref+'</div><div><b>Determination date</b>'+fmtDate(sds.issuedOn)+'</div><div><b>Ruleset</b>'+RULESET_VERSION+'</div></div>'+
   '<div class="sds-verdict '+vm[0]+'">'+vm[1]+(w.full&&!w.office?'<small>Key '+sgn(w.key)+' / 30 · combined '+sgn(w.total)+'</small>':w.office?'<small>Office-holder override</small>':'')+'</div>'+roleSummaryBlock(w)+
-  (review&&review.reviewerReasoning?'<div class="sds-statement"><b>Expert review (qualified IR35 specialist):</b> '+esc(review.reviewerReasoning)+' — '+esc(review.signedOffBy)+', '+esc(review.signedOffAt)+'</div>':'')+
+  reviewerBlock+
   reasons+ev+
   '<h2>Statement of reasonable care</h2><div class="sds-statement">This determination applied and recorded the established status principles against this worker’s actual engagement. Each answer carries a rationale where provided; borderline cases are referred to a qualified specialist before any statement issues; and this determination will be reviewed within 12 months or on any material change to role, rate or working practices.</div>'+
   '<h2>Review</h2><p class="small">Review by <b>'+fmtDate(sds.reviewBy)+'</b> (12 months), or sooner on material change.</p>'+
@@ -933,7 +967,7 @@ function signOff(ref){
     an Outside determination for one, whatever the score or their reasoning. */
  if(dec==='Outside'&&w&&w.office){alert('This engagement is recorded as a statutory office-holder (O1). An office-holder is inside IR35 by statute, so an Outside determination cannot be released.\n\nIf O1 was answered in error, correct the assessment rather than signing off here.');return;}
  const outcome=dec==='Outside'?'out':'in';w.outcome=outcome;w.status=dec;w.sdsState='Issued';w.nextReview=addMonths(NOW,12);w.lastSDS=NOW;
- const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12),reviewer:r.signedOffBy,reviewerReasoning:rea});
+ const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12),reviewer:r.signedOffBy,reviewerReasoning:rea,signedOffBy:r.signedOffBy,signedOffAt:r.signedOffAt});
  DB.audit(ref,'Borderline signed off by '+stageTxt,CURRENT_USER.name,'Decision: '+dec+'. '+rea);DB.audit(ref,'SDS issued','Ascend Workforce Solutions',sref+' — '+dec+' (released after '+stageTxt+' sign-off)');
  renderNav();openSDS(ref);
 }
@@ -1383,7 +1417,15 @@ function runAssess(){
  for(const q of RS){const checked=[...document.querySelectorAll('input[name="'+q.id+'"]:checked')];if(!checked.length){alert('Please answer every question — a complete record is part of reasonable care.');document.getElementById('q_'+q.id).scrollIntoView({behavior:'smooth',block:'center'});return;}answers[q.id]=q.multi?checked.map(c=>parseInt(c.value)):parseInt(checked[0].value);const nt=document.getElementById('note_'+q.id);if(nt&&nt.value.trim())evidence[q.id]=nt.value.trim();}
  const d=assess(answers,RS);
  if(ASSESS_MODE==='role'){renderRoleResult(answers,evidence,d);return;}
- const worker=(document.getElementById('aWorker').value||'').trim()||'[Worker / PSC]';const role=(document.getElementById('aRole').value||'').trim()||'[Role / assignment]';
+ /* H-16: a determination must name the worker it is issued for. Contractors are exempt — they do not issue an SDS. */
+ var _wIn=(document.getElementById('aWorker').value||'').trim();
+ var _rIn=(document.getElementById('aRole').value||'').trim();
+ if(!(CURRENT_USER&&CURRENT_USER.role==='contractor')&&(!_wIn||!_rIn)){
+  alert('Enter the worker / PSC name and the role / assignment before assessing. A Status Determination Statement must name the worker it is issued for.');
+  var _f=document.getElementById(!_wIn?'aWorker':'aRole');if(_f){_f.focus();_f.scrollIntoView({behavior:'smooth',block:'center'});}
+  return;
+ }
+ const worker=_wIn||'[Worker / PSC]';const role=_rIn||'[Role / assignment]';
  let divergence=null;
  if(PREFILL_SOURCE){const wl=d.office?'Inside':capOutcome(d.outcome);if(wl!==PREFILL_SOURCE.lean)divergence={role:PREFILL_SOURCE.title,roleLean:PREFILL_SOURCE.lean,workerLean:wl};}
  lastA={worker,role,answers,evidence,d,divergence,prefillRole:PREFILL_SOURCE?PREFILL_SOURCE.title:null,outstanding:outstandingContractorQs().map(function(q){return q.code;})};
