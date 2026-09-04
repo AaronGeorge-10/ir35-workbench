@@ -492,62 +492,181 @@ const PAT={
 const JD_SIGNALS={in:[['report to','Reports into a line manager (control)'],['line manager','Line-managed like an employee (control)'],['fixed hours','Set, fixed working hours (control)'],['full-time','Full-time, ongoing commitment (mutuality)'],['ongoing','Ongoing, open-ended work (mutuality)'],['open-ended','Open-ended engagement (mutuality)'],['permanent','Permanent-style role (mutuality)'],['company equipment','Uses client-provided equipment (minor)'],['company laptop','Uses client-provided equipment (minor)'],['manage a','Manages client staff (part and parcel)'],['team meetings','Attends internal team meetings (part and parcel)'],['appraisal','Subject to performance appraisals (part and parcel)'],['holiday','Employee-type benefits referenced (minor)'],['on-site','Required to work on client site (control)'],['must work','Mandated working pattern (control)']],out:[['deliverable','Engaged for a defined deliverable (mutuality)'],['statement of work','SOW-based engagement (mutuality)'],['fixed-price','Fixed-price basis (financial risk / payment)'],['fixed price','Fixed-price basis (financial risk / payment)'],['milestone','Milestone-based payment (payment)'],['project','Defined project scope (mutuality)'],['own equipment','Uses their own equipment (minor)'],['own methods','Controls their own working methods (control)'],['substitut','Right of substitution referenced (key)'],['no obligation','No mutuality of obligation stated (key)'],['specialist','Specialist engaged for a specific need (part and parcel)'],['outside ir35','Pre-positioned as outside IR35 (verify carefully)']]};
 const JD_SAMPLES={out:"We require a specialist geotechnical consultant to deliver a defined site-investigation report against a fixed-price statement of work. The consultant will use their own equipment and own methods, may send a suitably qualified substitute, and is engaged for the duration of the project only, with no obligation on either side to provide or accept further work once the deliverable is complete.",in:"Full-time SCADA engineer to report to the Commissioning Manager, working fixed hours on-site using company equipment. The role is ongoing and open-ended, includes attendance at daily team meetings and annual appraisals, holiday entitlement, and the post-holder will manage a small team of technicians as part of the client organisation."};
 
-/* ============================== DATA STORE (multi-tenant; localStorage) ============================== */
+/* ==========================================================================
+   B-07 · DATA LAYER CUT-OVER (Aaron, 3 September 2026)
+   Workers, SDSs, reviews, the audit trail and disputes now read and write
+   public.workers / public.sds / public.reviews / public.audit_log /
+   public.disputes in Postgres. They no longer touch tenant_state.state.
+
+   Why: the blob was upserted WHOLESALE on every save with no version check,
+   from nine call sites. A tab opened at 09:00 and saved at 14:05 destroyed
+   everything anyone did in between - including the audit trail that would
+   have evidenced the loss. Every user also downloaded the whole register
+   before any role check ran, and no authorisation could be enforced in the
+   database, because "sign off an SDS" and "add a worker" were the same
+   operation: overwrite one column.
+
+   This follows the S-02 role cut-over pattern EXACTLY, for the same reason it
+   worked: rows are mapped back into the shape the existing render code
+   already expects (ref/worker/role/key/total/sdsState/...), so NO VIEW CODE
+   CHANGED. The diff is confined to the data layer.
+
+   The blob's workers/sds/reviews/audit/disputes arrays are deliberately LEFT
+   IN PLACE, frozen, as a rollback copy - as S-02 did with roles. Nothing
+   reads them any more. Do not tidy them away until this has run for a while.
+
+   DB.save() IS GONE. It was the wholesale-overwrite primitive; keeping it as
+   a no-op would have turned a missed call site into silent data loss. It is
+   deleted so a missed call site throws loudly instead. Every write below is
+   a targeted, single-row statement that surfaces its own failure.
+
+   DB.nextId() IS GONE. References come from next_reference() in the database
+   (see ir35_b07b_reference_allocators.sql). nextId scanned the frozen blob
+   roles array against one counter, so the first worker ever created would
+   have been AS-2461 - the same digits as the next ROLE. Debt register D-13.
+
+   migrateReviews() IS GONE (D-06). It forced a full blob upsert on EVERY page
+   load, so merely opening the tool clobbered. It also hardcoded an escalation
+   of AS-2322 to the external adviser - a demo artefact that would have fired
+   against a real review queue.
+   ========================================================================== */
+
+function wbFail(what, err){
+ var why = (err && (err.message||err.hint||err.details)) || err || 'the secure store rejected the change';
+ console.error('WB write failed:', what, err||'');
+ if(window.__wbSaveFailed) window.__wbSaveFailed('the '+what+' could not be written ('+why+')');
+ else alert('Could not '+what+'.\n\n'+why+'\n\nNothing has been saved.');
+}
+function wbOk(){ if(window.__wbSaveFlag) window.__wbSaveFlag('ok'); }
+/* The write has already committed server-side by the time we refresh. If the
+   refresh itself fails the record is SAFE but the screen is stale - say so,
+   rather than leaving an unhandled rejection and a screen that looks current. */
+async function wbRefresh(what){
+ try{ await DB.loadAsync(); wbOk(); return true; }
+ catch(e){
+  console.error('WB refresh failed after '+what, e);
+  if(window.__wbSaveFailed) window.__wbSaveFailed('the '+what+' WAS saved, but this page could not reload it. Reload the page before relying on what is shown');
+  return false; }
+}
+function d10(v){ return v ? String(v).slice(0,10) : null; }
+function dts(v){ return v ? String(v).slice(0,10)+' '+String(v).slice(11,16) : null; }
+
+/* ---- row -> view mappers. Field names on the right are what the existing
+        render code reads; do not rename them without changing the views. ---- */
+function workerRowToView(r){return{
+ id:r.id, version:r.version, tenantId:r.client_id,
+ ref:r.worker_ref, worker:r.worker_name, role:r.role_title,
+ engagement:r.engagement||'', rate:(r.day_rate==null?0:Number(r.day_rate)), bucket:r.bucket||'Other',
+ answers:r.answers||{}, evidence:r.evidence||{},
+ hirerAnswers:r.hirer_answers||{}, contractorAnswers:r.contractor_answers||{},
+ contractorEvidence:r.contractor_evidence||{}, contractorFullSubmission:r.contractor_submission||null,
+ contractorSubmittedOn:d10(r.contractor_submitted_on), contractorSubmittedBy:r.contractor_submitted_by||null,
+ outcome:r.outcome, key:r.key_score, minor:r.minor_score, total:r.total_score, office:!!r.office_holder,
+ status:r.status, sdsState:r.sds_state||'None',
+ assessedOn:d10(r.assessed_on), nextReview:d10(r.next_review), lastSDS:d10(r.last_sds_on),
+ prefillRoleRef:r.prefill_role_ref||null, rs:r.ruleset_version,
+ rescoreRequired:!!r.rescore_required, rescoreReason:r.rescore_reason||null,
+ full:true
+};}
+function sdsRowToView(r){return{
+ id:r.id, tenantId:r.client_id, ref:r.sds_ref, workerId:r.worker_id, workerRef:r.worker_ref,
+ outcome:r.outcome, issuedOn:d10(r.issued_on), issuedBy:r.issued_by, status:r.status,
+ reviewBy:d10(r.review_by), reviewer:r.reviewer||null, reviewerReasoning:r.reviewer_reasoning||null,
+ signedOffBy:r.signed_off_by||null, signedOffAt:dts(r.signed_off_at), supersedesId:r.supersedes_id||null,
+ rs:r.ruleset_version
+};}
+function reviewRowToView(r){return{
+ id:r.id, version:r.version, tenantId:r.client_id, workerId:r.worker_id, workerRef:r.worker_ref,
+ reason:r.reason, flags:r.flags||[], stage:r.stage||1, status:r.status, assignedTo:r.assigned_to,
+ raisedAt:dts(r.raised_at), slaDue:d10(r.sla_due),
+ stage1By:r.stage1_by||null, stage1Reason:r.stage1_reason||null,
+ decision:r.decision||null, reasoning:r.reasoning||'',
+ signedOffBy:r.signed_off_by||null, signedOffAt:dts(r.signed_off_at), rulesetVersion:r.ruleset_version
+};}
+function auditRowToView(r){return{
+ id:r.id, tenantId:r.client_id, entity:r.entity, type:r.event_type, actor:r.actor,
+ when:dts(r.occurred_at), detail:r.detail||''
+};}
+function disputeRowToView(r){return{
+ id:r.id, tenantId:r.client_id, workerId:r.worker_id, workerRef:r.worker_ref, sdsId:r.sds_id||null,
+ raisedBy:r.raised_by, raisedAt:dts(r.raised_at), dueBy:d10(r.due_by), status:r.status,
+ detail:r.detail, response:r.response||null, respondedAt:dts(r.responded_at),
+ respondedBy:r.responded_by||null, outcome:r.outcome||null
+};}
+
+
 const DB={
- KEY:'ir35wb3_v03',mem:null,
+ mem:null,
  _read(){return this.mem;},
- _write(s){this.mem=s;this.s=s;this._persist(s);},
- /* A failed save must be impossible to miss. Until 19 Aug 2026 this had no .catch(), so a
-    dropped connection produced an unhandled rejection and the user saw NOTHING — while the
-    SDS rendered on screen, printable, with a reference number. A missing window.__sb was a
-    silent no-op for the same reason. Both now raise a persistent banner that does not fade. */
- _persist(s){
-  var fail=function(why,detail){console.error('WB save failed:',why,detail||'');
-   if(window.__wbSaveFailed)window.__wbSaveFailed(why); else if(window.__wbSaveFlag)window.__wbSaveFlag('err');};
-  try{
-   if(!window.__sb){fail('there is no connection to the secure store');return;}
-   window.__sb.from('tenant_state').upsert({client_id:WB.CLIENT_ID,state:s,updated_at:new Date().toISOString()},{onConflict:'client_id'})
-    .then(function(r){if(r&&r.error){fail('the secure store rejected the write',r.error.message);}
-                      else if(window.__wbSaveFlag){window.__wbSaveFlag('ok');}})
-    .catch(function(e){fail('the write did not reach the secure store',e&&e.message);});
-  }catch(e){fail('of an unexpected error while saving',e&&e.message);}
- },
  load(){let s=this._read();if(!s){s=this.seed();}this.s=s;return s;},
- async loadAsync(){var r=await window.__sb.from('tenant_state').select('state').eq('client_id',WB.CLIENT_ID).maybeSingle();if(r.error)throw r.error;var s=(r.data&&r.data.state)?r.data.state:null;
-  /* NEVER seed-and-write on an empty read. Until 19 Aug 2026 this branch wrote an empty
-     tenant straight over the row, so an RLS change, a client_id drift or a null state
-     destroyed every worker, SDS, review and audit line on a single page load, with a
-     green "Saved" toast and no user action. A missing row is now a hard stop: an empty
-     tenant is only ever created deliberately via DB.initialiseEmptyTenant(). */
-  if(!s){var e=new Error('NO_TENANT_ROW');e.__noTenantRow=true;throw e;}
-  {this.s=s;this.mem=s;}return this.s;},
- /* reset() deleted 2026-09-02 (debt register B-06 / D-05): an unguarded wipe of a live
-    tenant, five lines above the guarded initialiseEmptyTenant() that supersedes it, and
-    reachable from any console. It had no callers. */
- /* The ONLY sanctioned way to create a tenant store. Deliberately not wired to any button:
-    a control that initialises a tenant store is a control that can destroy one. Provision the
-    row at onboarding, or have the platform admin call this once from the console. */
- initialiseEmptyTenant(){if(this.s&&((this.s.workers||[]).length||(this.s.roles||[]).length)){throw new Error('Refusing to initialise — this tenant already holds data.');}this.mem=null;this.s=this.seed();this._write(this.s);return this.s;},
- save(){this._write(this.s);},
- nextId(p){/* Permanent reference allocator. Never reissues a number already present in the data, even if this.s.seq has been rolled back by a restore. Aaron George / Archie, 19 Aug 2026. */var hi=0,s=this.s;var scan=function(a,k){(a||[]).forEach(function(o){var m=String((o&&o[k])||'').match(/(\d+)\s*$/);if(m){var n=parseInt(m[1],10);if(n>hi)hi=n;}});};scan(s.roles,'roleId');scan(s.workers,'ref');scan(s.sds,'ref');var next=Math.max(2400+((s.seq||0)+1),hi+1,2401);s.seq=next-2400;return p+'-'+String(next);},
- audit(entity,type,actor,text){this.s.audit.unshift({tenantId:TENANT.id,entity,type,actor,when:NOW+' '+new Date().toTimeString().slice(0,5),detail:text||''});this.save();},
- workers(){return this.s.workers.filter(w=>w.tenantId===TENANT.id);},
- worker(ref){return this.s.workers.find(w=>w.ref===ref&&w.tenantId===TENANT.id);},
- sdsFor(ref){return this.s.sds.find(x=>x.workerRef===ref&&x.tenantId===TENANT.id);},
- reviews(){return this.s.reviews.filter(r=>r.tenantId===TENANT.id);},
- reviewFor(ref){return this.s.reviews.find(r=>r.workerRef===ref&&r.tenantId===TENANT.id);},
- audits(){return this.s.audit.filter(a=>a.tenantId===TENANT.id);},
- disputes(){return this.s.disputes.filter(d=>d.tenantId===TENANT.id);},
- seed(){
-  /* A new tenant starts EMPTY. 2026-08-19: the unreachable demo-fixture body that
-     used to sit after this return (4 example workers + their SDSs, reviews, audit
-     lines and disputes) has been deleted outright. A previous session had already
-     killed it with an early return; the code is now gone so a refactor cannot bring
-     fake worker records back into a real client's live register. Sample data belongs
-     in the sales demo build, never in a tenant store. */
-  const s={seq:0,workers:[],sds:[],reviews:[],audit:[],disputes:[],roles:[]};this.s=s;this.mem=s;return s;
- }
+ /* B-07: there is no blob to initialise any more. A tenant exists when its rows
+    exist; an empty tenant is simply a tenant with no workers. Provisioning is a
+    database concern (client_id on the account's JWT), not a button in the UI. */
+ initialiseEmptyTenant(){throw new Error('B-07: tenant state lives in tables now. There is nothing to initialise from the client.');},
+
+ /* ---- HYDRATE. Five scoped selects instead of one whole-register download.
+         RLS does the tenant filtering; the eq() is belt and braces. A
+         contractor sees only their own worker row and their own SDS, which is
+         the thing the blob made impossible. ---- */
+ async loadAsync(){
+  if(!window.__sb) throw new Error('NO_STORE');
+  var C=WB.CLIENT_ID;
+  var q=await Promise.all([
+   window.__sb.from('workers').select('*').eq('client_id',C).order('worker_ref',{ascending:true}),
+   window.__sb.from('sds').select('*').eq('client_id',C).order('sds_ref',{ascending:true}),
+   window.__sb.from('reviews').select('*').eq('client_id',C).order('raised_at',{ascending:false}),
+   window.__sb.from('audit_log').select('*').eq('client_id',C).order('occurred_at',{ascending:false}).limit(500),
+   window.__sb.from('disputes').select('*').eq('client_id',C).order('raised_at',{ascending:false})
+  ]);
+  /* A contractor is REFUSED rows on reviews and audit_log by policy, and that is
+     correct, not an error. Only a workers/sds failure is fatal. */
+  var fatalIdx=[0,1];
+  for(var i=0;i<q.length;i++){
+   if(q[i].error && fatalIdx.indexOf(i)>=0) throw q[i].error;
+  }
+  this.s={
+   workers:(q[0].data||[]).map(workerRowToView),
+   sds:(q[1].data||[]).map(sdsRowToView),
+   reviews:(q[2].error?[]:(q[2].data||[])).map(reviewRowToView),
+   audit:(q[3].error?[]:(q[3].data||[])).map(auditRowToView),
+   disputes:(q[4].error?[]:(q[4].data||[])).map(disputeRowToView),
+   roles:[]            /* frozen: the role library is public.roles via ROLE_CACHE (S-02) */
+  };
+  this.mem=this.s;
+  return this.s;
+ },
+ async reload(){return this.loadAsync();},
+
+ /* ---- AUDIT. One INSERT. occurred_at and actor_user_id are stamped
+        SERVER-SIDE by wb_stamp_audit() - a caller cannot choose who an event
+        is attributed to or when it happened (F2, 3 Sep). ---- */
+ async audit(entity,type,actor,text){
+  var row={client_id:WB.CLIENT_ID,entity:entity,event_type:type,actor:actor||'Unknown',detail:text||''};
+  var r=await window.__sb.from('audit_log').insert(row).select().single();
+  if(r.error){wbFail('audit line',r.error);return null;}
+  this.s.audit.unshift(auditRowToView(r.data));
+  return r.data;
+ },
+
+ workers(){return this.s.workers;},
+ worker(ref){return this.s.workers.find(w=>w.ref===ref);},
+ /* Append-only (B-07): a revised determination is a NEW row pointing at the one
+    it supersedes, so "the SDS for this worker" is the one nothing supersedes.
+    M-07 used to be exactly this bug - two rows, the stale one winning.
+    ⚠️ OPEN, B-08: sds_ref is derived by prefix swap from worker_ref, and
+    (client_id, sds_ref) is UNIQUE - so a SECOND statement for the same worker
+    cannot yet be inserted. Issuing a revision needs its own reference rule.
+    Nothing issues a revision today; do not build one until that is settled. */
+ sdsFor(ref){var all=this.s.sds.filter(x=>x.workerRef===ref);if(!all.length)return undefined;
+  var superseded={};all.forEach(function(x){if(x.supersedesId)superseded[x.supersedesId]=1;});
+  return all.filter(function(x){return !superseded[x.id];}).slice(-1)[0]||all.slice(-1)[0];},
+ reviews(){return this.s.reviews;},
+ reviewFor(ref){return this.s.reviews.find(r=>r.workerRef===ref);},
+ audits(){return this.s.audit;},
+ disputes(){return this.s.disputes;},
+ seed(){const s={workers:[],sds:[],reviews:[],audit:[],disputes:[],roles:[]};this.s=s;this.mem=s;return s;}
 };
+
 /* ============================== NAV / ROUTER ============================== */
 const VIEWS=[['dash','Reporting Dashboard'],['assess','New Assessment'],['jd','JD Analyser'],['library','Role Library'],['register','Worker Register'],['review','Review Queue'],['reviews','SDS Reviews'],['audit','Audit & Disputes']];
 function renderNav(){
@@ -648,9 +767,26 @@ function runAssess(){
  h+='</div>';
  document.getElementById('assessResult').innerHTML=h;
 }
-function mkWorker(ref,a,outcome){const w={tenantId:TENANT.id,ref,worker:a.worker,role:a.role,engagement:'Entered via live assessment',rate:0,bucket:'Other',answers:a.answers,evidence:a.evidence,outcome,key:a.d.keyScore,minor:a.d.minorScore,total:a.d.total,office:a.d.office,status:capOutcome(outcome),assessedOn:NOW,sdsState:'None',nextReview:null,full:true};DB.s.workers.push(w);return w;}
-function commitSDS(){const a=lastA,ref=DB.nextId('AS'),w=mkWorker(ref,a,a.d.outcome);const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome:a.d.outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12)});w.sdsState='Issued';w.nextReview=addMonths(NOW,12);w.lastSDS=NOW;DB.audit(ref,'Assessment completed',(CURRENT_USER?CURRENT_USER.name:'Client')+' ('+RESP+' respondent)','Outcome '+capOutcome(a.d.outcome)+' · key '+sgn(a.d.keyScore)+' · total '+sgn(a.d.total));DB.audit(ref,'SDS issued','Ascend Workforce Solutions',sref+' — '+capOutcome(a.d.outcome)+(a.d.office?' (office-holder override)':''));renderNav();openSDS(ref);}
-function commitBorder(){const a=lastA,ref=DB.nextId('AS'),w=mkWorker(ref,a,'border');w.sdsState='Referred';DB.s.reviews.push({tenantId:TENANT.id,workerRef:ref,reason:'Borderline',raisedAt:NOW+' '+new Date().toTimeString().slice(0,5),assignedTo:'{{INTERNAL_REVIEWER}} (internal senior reviewer)',status:'Awaiting internal review',slaDue:addDays(NOW,5),rulesetVersion:RULESET_VERSION,stage:1,decision:null,reasoning:''});DB.audit(ref,'Assessment completed',(CURRENT_USER?CURRENT_USER.name:'Client')+' ('+RESP+' respondent)','Outcome Borderline · key '+sgn(a.d.keyScore)+' · total '+sgn(a.d.total));DB.audit(ref,'Routed to expert review','Engine (borderline gate)','No SDS issued. SLA due '+addDays(NOW,5)+'.');if(a.outstanding&&a.outstanding.length){DB.audit(ref,'Contractor questions outstanding','Respondent scoping',a.outstanding.join(', ')+' — contractor-sourced, not answerable by the hirer. Scored neutral pending the contractor questionnaire.');}renderNav();go('review');}
+/* B-07: mkWorker() is gone - a worker record is created SERVER-SIDE, so the
+   reference allocation and the insert share one transaction and cannot
+   half-succeed. The duplicate commitSDS() that sat here (D-02, overridden by
+   the definition further down) is deleted rather than left as a landmine
+   calling DB.nextId(). */
+async function commitBorder(){
+ const a=lastA; if(!a) return;
+ const r=await window.__sb.rpc('refer_borderline',{
+  p_worker_name:a.worker, p_role_title:a.role,
+  p_answers:a.answers, p_evidence:a.evidence||{},
+  p_key_score:a.d.keyScore, p_minor_score:a.d.minorScore, p_total_score:a.d.total,
+  p_office_holder:!!a.d.office,
+  p_engagement:'Entered via live assessment', p_day_rate:0, p_bucket:'Other',
+  p_prefill_role_ref:(PREFILL_SOURCE&&PREFILL_SOURCE.roleId)||null,
+  p_outstanding:(a.outstanding&&a.outstanding.length)?a.outstanding.join(', '):null,
+  p_assigned_to:'{{INTERNAL_REVIEWER}} (internal senior reviewer)',
+  p_ruleset_version:RULESET_VERSION});
+ if(r.error){wbFail('referral to expert review',r.error);return;}
+ if(!await wbRefresh('referral')){return;} PREFILL_SOURCE=null; renderNav(); go('review');
+}
 
 /* ============================== JD ANALYSER ============================== */
 const jdEmpty='<h3><span class="dot"></span>Analysis</h3><p class="small">Paste a job description and press Analyse. The tool extracts IR35 signals and suggests a lean — it never issues a determination.</p>';
@@ -690,11 +826,8 @@ function renderReview(){
  document.getElementById('reviewList').innerHTML=h;
 }
 function evidenceList(w){if(!w||!w.evidence||!Object.keys(w.evidence).length)return '';return '<div class="small" style="margin-top:8px"><b>Evidence notes attached</b>'+Object.keys(w.evidence).map(id=>{const q=RULESET.find(x=>x.id===id);return '<div>• <b>'+esc(q?q.t.replace(/[—].*$/,'').trim():id)+':</b> '+esc(w.evidence[id])+'</div>';}).join('')+'</div>';}
-function signOff(ref){const dec=document.getElementById('dec_'+ref).value;const rea=(document.getElementById('rea_'+ref).value||'').trim();if(!dec){alert('Select a decision.');return;}if(!rea){alert('Reviewer reasoning is mandatory — a bare verdict is weak reasonable-care evidence.');return;}const r=DB.reviewFor(ref),w=DB.worker(ref);r.reasoning=rea;r.signedOffBy='{{ADVISER_NAME}} (external adviser)';r.signedOffAt=NOW+' '+new Date().toTimeString().slice(0,5);
- if(dec==='Needs more info'){r.status='Returned for info';DB.audit(ref,'Returned for more information','{{ADVISER_NAME}}',rea);renderNav();go('review');return;}
- r.status='Signed off';r.decision=dec;const outcome=dec==='Outside'?'out':'in';w.outcome=outcome;w.status=dec;w.sdsState='Issued';w.nextReview=addMonths(NOW,12);w.lastSDS=NOW;
- const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12),reviewer:'{{ADVISER_NAME}}',reviewerReasoning:rea});
- DB.audit(ref,'Expert review signed off','{{ADVISER_NAME}} (external adviser)','Decision: '+dec+'. '+rea);DB.audit(ref,'SDS issued','Ascend Workforce Solutions',sref+' — '+dec+' (released after expert sign-off)');renderNav();openSDS(ref);}
+/* B-07: the dead duplicate signOff() (D-02) deleted. It pushed an SDS straight
+   into the blob with no authority check at all. The live definition is above. */
 
 /* ============================== SDS REVIEW CALENDAR ============================== */
 function renderReviews(){
@@ -824,7 +957,7 @@ function initShell(){
  st.textContent='header .right .logout{margin-top:6px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:4px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}';
  document.head.appendChild(st);
  const main=document.querySelector('main');const sec=document.createElement('section');sec.className='view';sec.id='mine';main.appendChild(sec);
- migrateReviews();
+ /* migrateReviews() call removed with the function (B-07 / D-06). */
 }
 function logout(){try{if(window.__sb)window.__sb.auth.signOut();}catch(e){}CURRENT_USER=null;location.reload();}
 function updateHeader(){if(!CURRENT_USER)return;const r=document.querySelector('header .right');if(!r)return;r.innerHTML='<b>'+esc(CURRENT_USER.title)+' — '+esc(CURRENT_USER.name)+'</b><span>Tenant: '+esc(CURRENT_USER.tenant)+' · ruleset '+RULESET_VERSION+'</span><button class="logout" onclick="logout()">Log out</button>';}
@@ -927,35 +1060,36 @@ function renderReview(){
  if(done.length){h+='<div class="card"><h3><span class="dot"></span>Closed reviews</h3><table><thead><tr><th>Worker</th><th>Decision</th><th>Resolved at</th><th>By</th></tr></thead><tbody>'+done.map(r=>'<tr><td><b>'+r.workerRef+'</b></td><td>'+(r.decision?pill(r.decision):esc(r.status))+'</td><td class="small">'+esc(r.signedOffAt||'—')+'</td><td class="small">'+esc(r.signedOffBy||r.assignedTo)+'</td></tr>').join('')+'</tbody></table></div>';}
  document.getElementById('reviewList').innerHTML=h;
 }
-function escalate(ref){
- const r=DB.reviewFor(ref);if(!canActStage(CURRENT_USER&&CURRENT_USER.role,r.stage||1)){alert('You cannot act on this stage.');return;}
- const rea=(document.getElementById('rea_'+ref).value||'').trim();if(!rea){alert('Please record why you are escalating — it is part of the reasonable-care evidence.');return;}
- r.stage=2;r.status='Escalated — awaiting external';r.assignedTo='{{ADVISER_NAME}} (external adviser)';r.stage1By=CURRENT_USER.name;r.stage1Reason=rea;r.slaDue=addDays(NOW,5);
- DB.audit(ref,'Escalated to external expert (Stage 2)',CURRENT_USER.name,rea);renderNav();go('review');
+async function escalate(ref){
+ const rea=(document.getElementById('rea_'+ref).value||'').trim();
+ if(!rea){alert('Please record why you are escalating \u2014 it is part of the reasonable-care evidence.');return;}
+ const r=await window.__sb.rpc('escalate_review',{p_worker_ref:ref,p_reason:rea,
+   p_assigned_to:'{{ADVISER_NAME}} (external adviser)'});
+ if(r.error){wbFail('escalation',r.error);return;}
+ if(!await wbRefresh('escalation')){return;} renderNav(); go('review');
 }
-function signOff(ref){
- const r=DB.reviewFor(ref),w=DB.worker(ref);const role=CURRENT_USER&&CURRENT_USER.role;
- if(!canActStage(role,r.stage||1)){alert('Only the designated reviewer for this stage can sign off.');return;}
- const dec=document.getElementById('dec_'+ref).value;const rea=(document.getElementById('rea_'+ref).value||'').trim();
+/* B-07: THE AUTHORITY CHECK AND THE STATUTORY BACKSTOP NO LONGER LIVE HERE.
+   record_review_decision() enforces both in the database - who may act on
+   which stage, and the rule that an office-holder is inside IR35 by law so an
+   Outside determination can never be released for one. This is what finishes
+   B-06. The canActStage() call below is kept only to fail fast with a
+   friendly message; deleting it would weaken nothing. */
+async function signOff(ref){
+ const r0=DB.reviewFor(ref);
+ const dec=document.getElementById('dec_'+ref).value;
+ const rea=(document.getElementById('rea_'+ref).value||'').trim();
  if(!dec){alert('Select a decision.');return;}
- if(!rea){alert('Reasoning is mandatory — a bare verdict is weak reasonable-care evidence.');return;}
- if(dec==='Needs more info'){r.status='Returned for info';r.reasoning=rea;DB.audit(ref,'Returned for more information ('+stageLabel(r.stage||1)+')',CURRENT_USER.name,rea);renderNav();go('review');return;}
- const stageTxt=(r.stage===2)?'external expert':'internal senior reviewer';
- r.status='Signed off ('+(r.stage===2?'external':'internal')+')';r.decision=dec;r.reasoning=rea;r.signedOffBy=CURRENT_USER.name+' — '+CURRENT_USER.title;r.signedOffAt=NOW+' '+new Date().toTimeString().slice(0,5);
- /* Statutory backstop: an office-holder is inside IR35 by law. A reviewer may not release
-    an Outside determination for one, whatever the score or their reasoning. */
- if(dec==='Outside'&&w&&w.office){alert('This engagement is recorded as a statutory office-holder (O1). An office-holder is inside IR35 by statute, so an Outside determination cannot be released.\n\nIf O1 was answered in error, correct the assessment rather than signing off here.');return;}
- const outcome=dec==='Outside'?'out':'in';w.outcome=outcome;w.status=dec;w.sdsState='Issued';w.nextReview=addMonths(NOW,12);w.lastSDS=NOW;
- const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12),reviewer:r.signedOffBy,reviewerReasoning:rea,signedOffBy:r.signedOffBy,signedOffAt:r.signedOffAt});
- DB.audit(ref,'Borderline signed off by '+stageTxt,CURRENT_USER.name,'Decision: '+dec+'. '+rea);DB.audit(ref,'SDS issued','Ascend Workforce Solutions',sref+' — '+dec+' (released after '+stageTxt+' sign-off)');
- renderNav();openSDS(ref);
+ if(!rea){alert('Reasoning is mandatory \u2014 a bare verdict is weak reasonable-care evidence.');return;}
+ if(r0&&!canActStage(CURRENT_USER&&CURRENT_USER.role,r0.stage||1)){alert('Only the designated reviewer for this stage can sign off.');return;}
+ const r=await window.__sb.rpc('record_review_decision',{p_worker_ref:ref,p_decision:dec,p_reasoning:rea});
+ if(r.error){wbFail('sign-off',r.error);return;}
+ if(!await wbRefresh('sign-off')){return;} renderNav();
+ if(r.data&&r.data.sds_issued){openSDS(ref);}else{go('review');}
 }
-function migrateReviews(){
- DB.s.reviews.forEach(r=>{if(!r.stage)r.stage=1;if(r.stage===1&&(!r.assignedTo||r.assignedTo.indexOf('Bauer')===0)&&r.status&&r.status.indexOf('Awaiting')===0){r.assignedTo='{{INTERNAL_REVIEWER}} (internal senior reviewer)';r.status='Awaiting internal review';}});
- // demonstrate Stage 2: escalate AS-2322 to the external expert
- const e=DB.reviewFor('AS-2322');if(e&&e.stage===1){e.stage=2;e.status='Escalated — awaiting external';e.assignedTo='{{ADVISER_NAME}} (external adviser)';e.stage1By='{{INTERNAL_REVIEWER}}';e.stage1Reason='Substitution is genuinely fettered and control is finely balanced; referring to external tax counsel for a definitive view before any SDS issues.';e.slaDue=addDays(NOW,5);}
- DB.save();
-}
+/* B-07 / D-06: migrateReviews() deleted. It forced a FULL BLOB UPSERT on every
+   page load, so merely opening the tool clobbered whatever anyone else had
+   saved. It also hardcoded an escalation of AS-2322 to the external adviser -
+   a demo artefact that would have fired against a real review queue. */
 let RESP_LOCK=null;
 function setResp(r){if(RESP_LOCK&&r!==RESP_LOCK)return;RESP=(r==='contractor')?'contractor':'client';var c=document.getElementById('segClient'),o=document.getElementById('segCon');if(c)c.classList.toggle('active',RESP==='client');if(o)o.classList.toggle('active',RESP==='contractor');respScopeApply();}
 function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=document.getElementById('segClient'),o=document.getElementById('segCon');if(c)c.classList.toggle('disabled',lock==='contractor');if(o)o.classList.toggle('disabled',lock==='client');}
@@ -998,6 +1132,10 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
      moving the sign-off gate server-side (B-07). A client-side role check is never
      authorisation — it only decides what to draw. */
   try{Object.freeze(CURRENT_USER);}catch(e){}
+  /* Option B, staff-side half: apply any contractor submissions that have come
+     in since the last staff session. Runs the ONE scoring engine and lets
+     apply_rescore() run the outcome-change gate in one transaction. */
+  try{await processPendingRescores();}catch(e){console.error('rescore sweep failed',e);}
   renderNav();go(defaultTab(CURRENT_USER.role));
  }
  function abody(){return document.getElementById('wbAuthBody');}
@@ -1254,67 +1392,65 @@ function contractorScopedAnswers(answers){var out={};contractorQs().forEach(func
   if(answers&&answers[q.id]!==undefined&&answers[q.id]!==null)out[q.id]=answers[q.id];});return out;}
 function hasContractorInput(w){return !!(w&&w.contractorSubmittedOn);}
 
-function commitContractorSubmission(){
- var a=lastA;if(!a)return;
- var u=CURRENT_USER,ref=u&&u.workerRef,box=document.getElementById('assessResult');
- var w=ref?DB.worker(ref):null;
- if(!w){box.innerHTML='<div class="card"><h3><span class="dot"></span>Not linked to an engagement</h3>'
-   +'<p class="small">Nothing has been saved. This account is not yet linked to an engagement on the '
-   +esc(TENANT.name)+' register, so there is no assessment to attach your answers to. '
-   +'Contact the end-hirer and submit again once you have been linked.</p></div>';return;}
+/* B-07 + option B (Aaron, 3 Sep 2026). The contractor's answers go through
+   submit_contractor_answers(), a SECURITY DEFINER function that writes their
+   scoped answers, the merge and a rescore flag - and NOTHING else. It cannot
+   write an outcome, a score or an sds_state, so a contractor cannot
+   self-assess their way out of IR35 even with a crafted request.
 
- var scoped=contractorScopedAnswers(a.answers);
- if(!Object.keys(scoped).length){box.innerHTML='<div class="card"><h3><span class="dot"></span>Nothing to submit</h3>'
-   +'<p class="small">None of the contractor-only questions ('+esc(contractorCodes())+') were answered, so there is nothing to merge.</p></div>';return;}
-
- var before=w.outcome, hadSDS=!!DB.sdsFor(ref);
- if(!w.hirerAnswers)w.hirerAnswers=Object.assign({},w.answers||{});
- w.contractorAnswers=scoped;
- w.contractorEvidence=a.evidence||{};
- w.contractorFullSubmission=a.answers;          /* context only - never scored */
- w.contractorSubmittedOn=NOW;
- w.contractorSubmittedBy=(u&&u.name)||'Contractor';
-
- var merged=Object.assign({},w.hirerAnswers,scoped);
- var d=assess(merged,RULESET);
- w.answers=merged;w.key=d.keyScore;w.minor=d.minorScore;w.total=d.total;w.office=d.office;
- DB.save();
- DB.audit(ref,'Contractor questionnaire submitted',w.contractorSubmittedBy,
-   esc(contractorCodes())+' supplied by the contractor and merged into the assessment. Recomputed key '
-   +sgn(d.keyScore)+' / 30 · total '+sgn(d.total)+'. The hirer\u2019s own answers were not altered.');
-
- var changed=(d.outcome!==before);
- if(changed){
-  w.outcome=d.outcome;w.status=capOutcome(d.outcome);
-  w.sdsState=hadSDS?'Review required':'Referred';
-  if(hadSDS){var s=DB.sdsFor(ref);if(s)s.status='Under review \u2014 contractor input';}
-  if(!DB.reviewFor(ref)){
-   DB.s.reviews.push({tenantId:TENANT.id,workerRef:ref,reason:'Contractor input changed the outcome',
-    raisedAt:NOW+' '+new Date().toTimeString().slice(0,5),
-    assignedTo:'{{INTERNAL_REVIEWER}} (internal senior reviewer)',status:'Awaiting internal review',
-    slaDue:addDays(NOW,5),rulesetVersion:RULESET_VERSION,stage:1,decision:null,reasoning:''});
-  }
-  DB.save();
-  DB.audit(ref,'\u26a0 Outcome changed by contractor input','Engine (merge gate)',
-    'Was '+capOutcome(before)+', recomputes to '+capOutcome(d.outcome)+'.'
-    +(hadSDS?' The issued SDS has NOT been rewritten \u2014 it is marked under review.':'')
-    +' Routed to a qualified reviewer for sign-off.');
- } else {
-  DB.save();
-  DB.audit(ref,'Determination unchanged after contractor input','Engine (merge gate)',
-    'Outcome remains '+capOutcome(before)+' once '+esc(contractorCodes())+' are taken into account.');
- }
-
+   The scoring engine is NOT duplicated server-side. The recompute and the
+   outcome-change gate run in processPendingRescores() below, staff-side,
+   using the ONE engine. That is the whole point of option B: the rules that
+   decide a statutory determination exist in exactly one place. */
+async function commitContractorSubmission(){
+ var a=lastA; if(!a) return;
+ var box=document.getElementById('assessResult');
+ var r=await window.__sb.rpc('submit_contractor_answers',{
+   p_answers:a.answers, p_evidence:a.evidence||{}, p_ruleset_version:RULESET_VERSION});
+ if(r.error){
+  var m=(r.error.message||'');
+  if(/not linked to an engagement/i.test(m)){
+   box.innerHTML='<div class="card"><h3><span class="dot"></span>Not linked to an engagement</h3>'
+    +'<p class="small">Nothing has been saved. This account is not yet linked to an engagement on the '
+    +esc(TENANT.name)+' register, so there is no assessment to attach your answers to. '
+    +'Contact the end-hirer and submit again once you have been linked.</p></div>';return;}
+  if(/nothing to merge/i.test(m)){
+   box.innerHTML='<div class="card"><h3><span class="dot"></span>Nothing to submit</h3>'
+    +'<p class="small">None of the contractor-only questions ('+esc(contractorCodes())+') were answered, so there is nothing to merge.</p></div>';return;}
+  wbFail('submission',r.error);return;}
+ var res=r.data||{};
+ try{await DB.loadAsync();}catch(e){}
+ wbOk();
  box.innerHTML='<div class="card"><h3><span class="dot"></span>Submitted to '+esc(TENANT.name)+'</h3>'
-  +'<p class="small">Your answers to <b>'+esc(contractorCodes())+'</b> have been merged into assessment <b>'+esc(ref)+'</b> and recorded on the audit trail. '
+  +'<p class="small">Your answers to <b>'+esc(res.codes_supplied||contractorCodes())+'</b> have been merged into assessment <b>'+esc(res.worker_ref||'')+'</b> and recorded on the audit trail. '
   +'Your remaining answers are kept as supporting context but do not change the end-hirer\u2019s determination \u2014 the determination is theirs to make.</p>'
-  +(changed
-    ? '<div class="gatebox">\u26a0 Taking your answers into account changes the assessment from <b>'+esc(capOutcome(before))+'</b> to <b>'+esc(capOutcome(d.outcome))+'</b>. '
-      +(hadSDS?'The statement already issued has <b>not</b> been altered \u2014 ':'')
-      +'the case has been routed to a qualified reviewer, who will confirm the position before anything is issued or reissued.</div>'
-    : '<p class="small">This does not change the determination \u2014 it remains <b>'+esc(capOutcome(before))+'</b>.</p>')
+  +'<p class="small">The end-hirer\u2019s system will re-check the determination against your answers. If it changes, a qualified reviewer confirms the position before anything is issued or reissued'
+  +(res.sds_already_issued?', and the statement already issued is <b>not</b> altered':'')+'.</p>'
   +'<div style="margin-top:12px"><button class="btn sec" onclick="go(\'mine\')">Back to my IR35 status \u2192</button></div></div>';
  renderNav();
+}
+
+/* THE STAFF-SIDE HALF OF OPTION B. Without this a contractor submission
+   changes the answers on the record and nothing recomputes. Runs on load for
+   any staff user: re-scores with the single engine and lets apply_rescore()
+   run the outcome-change gate in one transaction. */
+async function processPendingRescores(){
+ if(!window.__sb||!CURRENT_USER||CURRENT_USER.role==='contractor')return 0;
+ var pend=((DB.s&&DB.s.workers)||[]).filter(function(w){return w.rescoreRequired;});
+ var done=0;
+ for(var i=0;i<pend.length;i++){
+  var w=pend[i];
+  var merged=Object.assign({},w.hirerAnswers||{},w.contractorAnswers||{});
+  var d=assess(merged,RULESET);
+  var r=await window.__sb.rpc('apply_rescore',{
+    p_worker_ref:w.ref, p_outcome:d.outcome, p_key_score:d.keyScore,
+    p_minor_score:d.minorScore, p_total_score:d.total, p_office_holder:!!d.office,
+    p_assigned_to:'{{INTERNAL_REVIEWER}} (internal senior reviewer)'});
+  if(r.error){wbFail('re-score of '+w.ref,r.error);continue;}
+  done++;
+ }
+ if(done){try{await DB.loadAsync();}catch(e){}}
+ return done;
 }
 
 /* engine now takes a ruleset (defaults to the individual set) */
@@ -1451,10 +1587,7 @@ function ensureRoles(){
  if(!DB.s)DB.load();if(!DB.s.roles)DB.s.roles=[];
 }
 
-function commitRole(){if(!lastRole)return;ensureRoles();const d=lastRole.d;const id=DB.nextId('ROLE');
- DB.s.roles.push({tenantId:TENANT.id,roleId:id,title:lastRole.title||'[Role]',sector:lastRole.sector||'—',engagement:lastRole.engagement||'—',answers:lastRole.answers,evidence:lastRole.evidence||{},lean:d.office?'Inside':capOutcome(d.outcome),outcome:d.outcome,key:d.keyScore,total:d.total,office:d.office,rs:RULESET_VERSION,by:'Client respondent',date:NOW,stale:false});
- DB.save();DB.audit(id,'Role added to library','Role library','Provisional lean '+(d.office?'Inside':capOutcome(d.outcome))+' · '+RULESET_VERSION);
- go('library');}
+/* B-07: dead commitRole() (D-02) deleted - it called DB.nextId() and DB.save(). */
 
 function useRole(roleId){ensureRoles();const r=DB.s.roles.find(x=>x.roleId===roleId&&x.tenantId===TENANT.id);if(!r)return;
  ASSESS_MODE='worker';go('assess');
@@ -1479,7 +1612,26 @@ function renderLibrary(){ensureRoles();
  }).join(''):'<p class="small" style="grid-column:1/-1">No roles in the library yet. Click <b>+ Assess a new role</b> to add one.</p>');
 }
 
-function commitSDS(){const a=lastA,ref=DB.nextId('AS'),w=mkWorker(ref,a,a.d.outcome);const sref='SDS-'+ref.replace('AS-','');DB.s.sds.push({tenantId:TENANT.id,ref:sref,workerRef:ref,outcome:a.d.outcome,issuedOn:NOW,issuedBy:'Ascend Workforce Solutions',status:'Issued',reviewBy:addMonths(NOW,12)});w.sdsState='Issued';w.nextReview=addMonths(NOW,12);w.lastSDS=NOW;DB.audit(ref,'Assessment completed',(CURRENT_USER?CURRENT_USER.name:'Client')+' ('+RESP+' respondent)','Outcome '+capOutcome(a.d.outcome)+' · key '+sgn(a.d.keyScore)+' · total '+sgn(a.d.total));if(a.prefillRole){DB.audit(ref,'Pre-filled from role library','Role library','Source role: '+a.prefillRole+(a.divergence?' — DIVERGED (role '+a.divergence.roleLean+' → worker '+a.divergence.workerLean+')':' — consistent'));}if(a.outstanding&&a.outstanding.length){DB.audit(ref,'Contractor questions outstanding','Respondent scoping',a.outstanding.join(', ')+' — contractor-sourced, not answerable by the hirer. Scored neutral pending the contractor questionnaire.');}DB.audit(ref,'SDS issued','Ascend Workforce Solutions',sref+' — '+capOutcome(a.d.outcome)+(a.d.office?' (office-holder override)':''));PREFILL_SOURCE=null;renderNav();openSDS(ref);}
+/* B-07: issuing a determination is ONE call. issue_sds() allocates the
+   reference, inserts the worker, inserts the SDS and writes the audit lines
+   in a single transaction, and enforces the borderline gate and the statutory
+   office-holder backstop server-side. It cannot half-succeed. */
+async function commitSDS(){
+ const a=lastA; if(!a) return;
+ const r=await window.__sb.rpc('issue_sds',{
+  p_worker_name:a.worker, p_role_title:a.role,
+  p_answers:a.answers, p_evidence:a.evidence||{},
+  p_outcome:a.d.outcome, p_key_score:a.d.keyScore, p_minor_score:a.d.minorScore,
+  p_total_score:a.d.total, p_office_holder:!!a.d.office,
+  p_engagement:'Entered via live assessment', p_day_rate:0, p_bucket:'Other',
+  p_prefill_role_ref:(PREFILL_SOURCE&&PREFILL_SOURCE.roleId)||null,
+  p_prefill_note:a.prefillRole?('Source role: '+a.prefillRole+(a.divergence?' \u2014 DIVERGED (role '+a.divergence.roleLean+' \u2192 worker '+a.divergence.workerLean+')':' \u2014 consistent')):null,
+  p_outstanding:(a.outstanding&&a.outstanding.length)?a.outstanding.join(', '):null,
+  p_ruleset_version:RULESET_VERSION});
+ if(r.error){wbFail('determination',r.error);return;}
+ const out=Array.isArray(r.data)?r.data[0]:r.data;
+ if(!await wbRefresh('determination')){return;} PREFILL_SOURCE=null; renderNav(); openSDS(out.worker_ref);
+}
 
 
 /* ===== Role library — edit / delete / search / real dates (v0.3-role.1) ===== */
@@ -1493,16 +1645,9 @@ function ensureRoles(){
 
 function setAssessMode(m){ASSESS_MODE=m;PREFILL_SOURCE=null;EDIT_ROLE_ID=null;wireAssess();}
 
-function commitRole(){if(!lastRole)return;ensureRoles();const d=lastRole.d;const lean=d.office?'Inside':capOutcome(d.outcome);
- if(EDIT_ROLE_ID){
-  const r=DB.s.roles.find(x=>x.roleId===EDIT_ROLE_ID&&x.tenantId===TENANT.id);
-  if(r){r.title=lastRole.title||r.title;r.sector=lastRole.sector||'—';r.engagement=lastRole.engagement||'—';r.answers=lastRole.answers;r.evidence=lastRole.evidence||{};r.lean=lean;r.outcome=d.outcome;r.key=d.keyScore;r.total=d.total;r.office=d.office;r.rs=RULESET_VERSION;r.updated=realToday();}
-  DB.save();DB.audit(EDIT_ROLE_ID,'Role edited','Role library','Provisional lean '+lean+' · '+RULESET_VERSION);EDIT_ROLE_ID=null;go('library');return;
- }
- const id=DB.nextId('ROLE');
- DB.s.roles.push({tenantId:TENANT.id,roleId:id,title:lastRole.title||'[Role]',sector:lastRole.sector||'—',engagement:lastRole.engagement||'—',answers:lastRole.answers,evidence:lastRole.evidence||{},lean:lean,outcome:d.outcome,key:d.keyScore,total:d.total,office:d.office,rs:RULESET_VERSION,by:(CURRENT_USER?CURRENT_USER.name:'Client respondent'),date:realToday(),updated:null,stale:false});
- DB.save();DB.audit(id,'Role added to library','Role library','Provisional lean '+lean+' · '+RULESET_VERSION);go('library');
-}
+/* B-07: the second dead commitRole() (D-02) deleted. The live one is the
+   async, table-backed definition further down, shipped with S-02. This copy
+   called DB.nextId() and DB.save(), both of which no longer exist. */
 
 function editRole(roleId){if(!canEditRoles())return;ensureRoles();const r=DB.s.roles.find(x=>x.roleId===roleId&&x.tenantId===TENANT.id);if(!r)return;
  PREFILL_SOURCE=null;ASSESS_MODE='role';go('assess');EDIT_ROLE_ID=r.roleId;
@@ -1513,11 +1658,9 @@ function editRole(roleId){if(!canEditRoles())return;ensureRoles();const r=DB.s.r
  document.getElementById('assessResult').innerHTML='<div class="card"><h3><span class="dot"></span>Editing '+esc(r.roleId)+'</h3><p class="small">Editing <b>'+esc(r.title)+'</b>. Change the role title, sector, engagement or any answer, then <b>Run</b> and <b>Save to role library</b> to update this role in place.</p></div>';
 }
 
-function deleteRole(roleId){if(!canEditRoles())return;ensureRoles();const r=DB.s.roles.find(x=>x.roleId===roleId&&x.tenantId===TENANT.id);if(!r)return;
- if(!window.confirm('Delete role “'+r.title+'” ('+r.roleId+') from the library? This cannot be undone.'))return;
- DB.s.roles=DB.s.roles.filter(x=>!(x.roleId===roleId&&x.tenantId===TENANT.id));DB.save();
- DB.audit(roleId,'Role deleted','Role library',r.title);renderLibrary();
-}
+/* B-07: dead deleteRole() (D-02) deleted - it filtered the frozen blob roles
+   array and called DB.save(), which no longer exists. The live one is the
+   async, table-backed definition further down (S-02). */
 
 function renderLibrary(){ensureRoles();EDIT_ROLE_ID=null;
  const grid=document.getElementById('libGrid');
