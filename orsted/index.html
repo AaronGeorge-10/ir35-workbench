@@ -991,19 +991,39 @@ async function runAnalyser(){
  res.innerHTML='';prog.style.display='block';
  if(!f||!f.files||!f.files[0]){prog.textContent='Choose a contract file first.';return;}
  var token='';try{var s=await window.__sb.auth.getSession();token=(s&&s.data&&s.data.session)?s.data.session.access_token:'';}catch(e){}
+ /* B-10: the analyser requires a signed-in Workbench user. Fail here, where it
+    is explainable, rather than firing a request that 401s somewhere else. */
+ if(!token){prog.textContent='You need to be signed in to analyse a contract. Reload the page and sign in again.';return;}
  var fd=new FormData();fd.append('file',f.files[0]);fd.append('contract_id',f.files[0].name);
  prog.textContent='Uploading and starting analysis…';
  var job;
  try{var r=await fetch(WB.ANALYZER_URL+'/analyze',{method:'POST',headers:token?{'Authorization':'Bearer '+token}:{},body:fd});job=await r.json();if(!r.ok||!job.job_id){throw new Error(job.detail||('HTTP '+r.status));}}
  catch(e){prog.textContent='Could not start analysis: '+e.message;return;}
  var total=job.total||28;
- var poll=setInterval(function(){
-  fetch(WB.ANALYZER_URL+'/analyze/'+job.job_id).then(function(pr){return pr.json();}).then(function(p){
+ /* B-10: the poll is an AUTHENTICATED, tenant-scoped endpoint. It re-reads the
+    session every tick so a token refresh mid-grade doesn't strand the job, and it
+    reports failures instead of hiding them behind an empty catch. */
+ var fails=0;
+ var poll=setInterval(async function(){
+  try{
+   var ps='';try{var s2=await window.__sb.auth.getSession();ps=(s2&&s2.data&&s2.data.session)?s2.data.session.access_token:'';}catch(e){}
+   if(!ps){clearInterval(poll);prog.textContent='Your session ended while the contract was being analysed. Sign in again and re-run it.';return;}
+   var pr=await fetch(WB.ANALYZER_URL+'/analyze/'+job.job_id,{headers:{'Authorization':'Bearer '+ps}});
+   if(pr.status===401){clearInterval(poll);prog.textContent='The analyser refused this session (401). Sign out and back in, then re-run. If it persists the service is missing its signing secret — tell Aaron.';return;}
+   if(pr.status===404){clearInterval(poll);prog.textContent='That analysis is no longer available (404). It may have expired, or it belongs to another tenant. Re-run it.';return;}
+   if(!pr.ok){throw new Error('HTTP '+pr.status);}
+   var p=await pr.json();
+   fails=0;
    if(p.status==='running'){prog.textContent='Grading factor '+(p.progress||0)+'/'+(p.total||total)+'… (a full contract takes a couple of minutes)';return;}
    clearInterval(poll);
    if(p.status==='error'){prog.textContent='Analysis failed: '+(p.error||'unknown error');return;}
+   if(p.store_error){console.error('analyser store_error',p.store_error);}
    prog.style.display='none';renderContractAssessment(p.assessment);
-  }).catch(function(e){});
+  }catch(e){
+   /* Transient network blips are tolerated; a persistent failure is reported. */
+   fails++;console.error('analyser poll failed',e);
+   if(fails>=3){clearInterval(poll);prog.textContent='Lost contact with the analyser: '+e.message+'. The analysis may still have completed — re-open the tab shortly.';}
+  }
  },4000);
 }
 function renderContractAssessment(a){
