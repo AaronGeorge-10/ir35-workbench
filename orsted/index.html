@@ -576,7 +576,11 @@ function sdsRowToView(r){return{
  outcome:r.outcome, issuedOn:d10(r.issued_on), issuedBy:r.issued_by, status:r.status,
  reviewBy:d10(r.review_by), reviewer:r.reviewer||null, reviewerReasoning:r.reviewer_reasoning||null,
  signedOffBy:r.signed_off_by||null, signedOffAt:dts(r.signed_off_at), supersedesId:r.supersedes_id||null,
- rs:r.ruleset_version
+ rs:r.ruleset_version,
+ /* B-08. The statement as issued, and the seal written over it in the same
+    transaction. Everything else on this object is metadata ABOUT the
+    determination; this is the determination. */
+ document:r.document||null, documentSha:r.document_sha256||null
 };}
 function reviewRowToView(r){return{
  id:r.id, version:r.version, tenantId:r.client_id, workerId:r.worker_id, workerRef:r.worker_ref,
@@ -871,44 +875,175 @@ function sdsAnswerText(it){
  }
  return it.q.opts[it.ans]?it.q.opts[it.ans][0]:'';
 }
-function sdsAnswerTag(it){
- if(sdsUnanswered(it))return it.q.resp==='contractor'
-  ?'<span class="sds-tag neu">AWAITING CONTRACTOR</span>'
-  :'<span class="sds-tag neu">NOT ANSWERED</span>';
- var v=it.val;
- return v>0?'<span class="sds-tag pos">SUPPORTS OUTSIDE</span>'
-  :v<0?'<span class="sds-tag att">ATTENTION</span>'
-  :'<span class="sds-tag neu">NEUTRAL</span>';
+/* B-08: sdsAnswerTag() deleted. The tag is resolved to a LABEL at issue by
+   sdsTagParts() and stored on the statement, so a later change to the tagging
+   rules cannot restate a determination that has already been handed over. */
+/* ================= B-08 - THE STATEMENT IS BUILT ONCE, AT ISSUE =================
+   Answers are stored as bare option INDICES. Question text, option text, the
+   weights and the thresholds all live in the application. So every one of
+   those could move under a statement that had already been handed to a worker
+   and to HMRC - reordering two options was enough to make a historic SDS say
+   the opposite of what it said when it issued.
+
+   buildSdsDoc() resolves all of it to TEXT at the moment of issue: the
+   question as asked, the answer as selected, the scores, the outcome, the
+   ruleset version and the wording of the statutory blocks. issue_sds() and
+   record_review_decision() store that object and seal it with a sha256 in the
+   same transaction that writes the determination.
+
+   What is deliberately NOT copied in here: the reference, the issue date, the
+   review date and the reviewer block. Those are allocated or stamped
+   server-side onto public.sds, which is append-only with no update or delete
+   policy, so they cannot drift and the renderer reads them live. That is what
+   lets the whole thing be one transaction instead of two.
+
+   ⚠️ If you add anything to the rendered statement, add it HERE as well, or
+   the new element will be re-derived at view time and B-08 is quietly back. */
+const SDS_TEMPLATE_VERSION='sds-tpl-1';
+
+function sdsSummaryText(worker,role,engagement){
+ return 'Engagement of '+(worker||'the worker')+' as '+(role||'a contractor')
+  +(engagement?' — '+engagement+'.':'.')
+  +' Assessed against this worker’s actual working practices under the established status tests; see the reasons below.';
 }
-function openSDS(ref){if(CURRENT_USER&&CURRENT_USER.role==='contractor'&&ref!==CURRENT_USER.workerRef){alert('You can only view your own SDS.');return;}
- const w=DB.worker(ref),sds=DB.sdsFor(ref);if(!w||!sds){alert('SDS not found.');return;}
- const review=DB.reviewFor(ref);const vm={out:['out','OUTSIDE IR35'],in:['in','INSIDE IR35']}[w.outcome]||['border','BORDERLINE'];
+
+function sdsStatements(clientName){
+ return {
+  reasonable_care:'This determination applied and recorded the established status principles against this worker’s actual engagement. Each answer carries a rationale where provided; borderline cases are referred to a qualified specialist before any statement issues; and this determination will be reviewed within 12 months or on any material change to role, rate or working practices.',
+  disagreement:'The worker or fee-payer may make representations. The end-hirer will consider them and respond within 45 days.',
+  footer:'Produced using the Ascend IR35 Workbench (Ascend Workforce Solutions IP), ruleset '+RULESET_VERSION+'. Decision-support, not legal advice. This determination is made by the end-hirer ('+clientName+'), who remains legally responsible for it.'
+ };
+}
+
+/* Same three-state logic as the old inline renderer (B-05): unanswered,
+   awaiting the contractor, and genuinely answered are distinct. Resolved to a
+   LABEL here so a later change to the tagging rules cannot restate a
+   statement that has already issued. */
+function sdsTagParts(it){
+ if(it.q.band==='override')return (it.val<=-99)?['INSIDE (STATUTORY)','att']:['',''];
+ if(sdsUnanswered(it))return [it.q.resp==='contractor'?'AWAITING CONTRACTOR':'NOT ANSWERED','neu'];
+ return it.val>0?['SUPPORTS OUTSIDE','pos']:(it.val<0?['ATTENTION','att']:['NEUTRAL','neu']);
+}
+
+function buildSdsDoc(o){
+ var d=o.d;
+ var out=o.outcomeOverride||(d&&d.outcome);
+ if(out!=='out'&&out!=='in')throw new Error('a statement can only be built for a decided outcome, not “'+out+'”');
+ if(!d||!d.items||!d.items.length)throw new Error('no assessment to record');
+ var items=[];
+ d.items.forEach(function(it){
+  if(it.q.band==='context')return;
+  var t=sdsTagParts(it);
+  items.push({
+   code:it.q.code, group:it.q.grp, band:it.q.band,
+   question:it.q.t.replace(/[—].*$/,'').trim(),
+   answer_text:sdsAnswerText(it),
+   tag_label:t[0], tag_class:t[1],
+   score:it.val
+  });
+ });
+ if(!items.length)throw new Error('no questions to record on the statement');
+ var ev=[];
+ Object.keys(o.evidence||{}).forEach(function(id){
+  var q=RULESET.find(function(x){return x.id===id;});
+  ev.push({question:q?q.t.replace(/[—].*$/,'').trim():id, note:o.evidence[id]});
+ });
+ return {
+  template_version:SDS_TEMPLATE_VERSION,
+  ruleset_version:d.rulesetVersion,
+  client_name:TENANT.name,
+  worker:o.worker, role_title:o.role,
+  outcome:out,
+  verdict_label:(out==='out')?'OUTSIDE IR35':'INSIDE IR35',
+  office_holder:!!d.office,
+  key_score:d.keyScore, minor_score:d.minorScore, total_score:d.total,
+  role_summary:o.summary||'',
+  items:items, evidence:ev,
+  statements:sdsStatements(TENANT.name)
+ };
+}
+
+/* The document is read back out of the store, so it is treated as untrusted
+   input on the way to innerHTML - every value escaped, and the CSS class
+   whitelisted rather than interpolated. */
+function sdsTagHTML(it){
+ if(!it.tag_label)return '';
+ var cls=(['pos','att','neu'].indexOf(it.tag_class)>=0)?it.tag_class:'neu';
+ return '<span class="sds-tag '+cls+'">'+esc(it.tag_label)+'</span>';
+}
+
+function openSDS(ref){
+ if(CURRENT_USER&&CURRENT_USER.role==='contractor'&&ref!==CURRENT_USER.workerRef){alert('You can only view your own SDS.');return;}
+ const sds=DB.sdsFor(ref);
+ const ov=document.getElementById('sdsOverlay');
+ if(!sds){alert('SDS not found.');return;}
+ const doc=sds.document;
+
+ /* B-08. If there is no stored statement we say so. We do NOT rebuild one
+    from the register: the register moves - contractor submissions, rescores,
+    a recalibrated ruleset - and a rebuilt document could differ from the one
+    that was actually issued. An honest gap beats a confident forgery. */
+ if(!doc||!doc.items||!doc.items.length){
+  ov.innerHTML='<div class="sds"><div class="sds-toolbar"><button class="btn sec" onclick="closeSDS()">Close</button></div><div class="sds-body">'
+   +'<h1>Statement unavailable</h1>'
+   +'<p class="small">'+esc(sds.ref)+' has no stored statement, so it cannot be displayed. It is deliberately not rebuilt from the current register, because that could show something other than what was issued. Please contact Ascend quoting '+esc(sds.ref)+'.</p>'
+   +'</div></div>';
+  ov.classList.add('show');return;}
+
+ const vm={out:['out','OUTSIDE IR35'],in:['in','INSIDE IR35']}[doc.outcome]||['border','BORDERLINE'];
+ const st=doc.statements||{};
+
+ const groups={};
+ doc.items.forEach(function(it){(groups[it.group||'Assessment']=groups[it.group||'Assessment']||[]).push(it);});
  let reasons='';
- if(w.full&&w.answers){const d=assess(w.answers);const groups={};d.items.forEach(it=>{if(it.q.band==='context')return;(groups[it.q.grp]=groups[it.q.grp]||[]).push(it);});
-  Object.keys(groups).forEach(g=>{reasons+='<h2>'+g+'</h2>'+groups[g].map(it=>{const v=it.val;const tag=it.q.band==='override'?(v<=-99?'<span class="sds-tag att">INSIDE (STATUTORY)</span>':''):sdsAnswerTag(it);const ansTxt=sdsAnswerText(it);return '<div class="sds-q">'+tag+esc(it.q.code+' — '+it.q.t.replace(/[—].*$/,'').trim())+': <span class="a">'+esc(ansTxt)+'</span></div>';}).join('');});}
- else{const canned={out:[['SUPPORTS OUTSIDE','Genuine right of substitution the client cannot unreasonably refuse.'],['SUPPORTS OUTSIDE','Worker controls their own methods, hours and location.'],['SUPPORTS OUTSIDE','No mutuality — engaged for a defined deliverable.'],['SUPPORTS OUTSIDE','Carries financial risk; own equipment; works for other clients.']],in:[['ATTENTION','Work must be carried out personally; no genuine substitution.'],['ATTENTION','Client directs how, when and where the work is done.'],['ATTENTION','Ongoing mutuality of obligation; paid in downtime.'],['ATTENTION','Integrated into the client organisation.']]}[w.outcome]||[['NEUTRAL','Mixed indicators across the key tests; referred for review.']];
-  reasons='<h2>Summary of reasons</h2>'+canned.map(c=>'<div class="sds-q"><span class="sds-tag '+(c[0]==='SUPPORTS OUTSIDE'?'pos':c[0]==='ATTENTION'?'att':'neu')+'">'+c[0]+'</span>'+esc(c[1])+'</div>').join('');}
- var _rvReason=(sds&&sds.reviewerReasoning)||(review&&review.reviewerReasoning)||(review&&review.reasoning)||'';
- var _rvBy=(sds&&sds.signedOffBy)||(review&&review.signedOffBy)||(sds&&sds.reviewer)||'';
- var _rvAt=(sds&&sds.signedOffAt)||(review&&review.signedOffAt)||'';
- var reviewerBlock=_rvReason?'<div class="sds-statement"><b>Expert review (qualified IR35 specialist):</b> '+esc(_rvReason)+(_rvBy?' — '+esc(_rvBy):'')+(_rvAt?', '+esc(_rvAt):'')+'</div>':'';
- let ev='';const evk=Object.keys(w.evidence||{});if(evk.length){ev='<h2>Evidence recorded</h2>'+evk.map(id=>{const q=RULESET.find(x=>x.id===id);return '<div class="sds-q"><b>'+esc(q?q.t.replace(/[—].*$/,'').trim():id)+':</b> '+esc(w.evidence[id])+'</div>';}).join('');}
- 
+ Object.keys(groups).forEach(function(g){
+  reasons+='<h2>'+esc(g)+'</h2>'+groups[g].map(function(it){
+   return '<div class="sds-q">'+sdsTagHTML(it)+esc((it.code?it.code+' — ':'')+(it.question||''))
+    +': <span class="a">'+esc(it.answer_text)+'</span></div>';
+  }).join('');
+ });
+
+ let ev='';
+ if(doc.evidence&&doc.evidence.length){
+  ev='<h2>Evidence recorded</h2>'+doc.evidence.map(function(e){
+   return '<div class="sds-q"><b>'+esc(e.question)+':</b> '+esc(e.note)+'</div>';}).join('');
+ }
+
+ /* The reviewer block comes off the sds row, not the reviews table. B-04 was
+    exactly this read going to the wrong record; the row is append-only, the
+    reviews table is not. */
+ const _rvReason=sds.reviewerReasoning||'';
+ const _rvBy=sds.signedOffBy||sds.reviewer||'';
+ const _rvAt=sds.signedOffAt||'';
+ const reviewerBlock=_rvReason
+  ?'<div class="sds-statement"><b>Expert review (qualified IR35 specialist):</b> '+esc(_rvReason)
+    +(_rvBy?' — '+esc(_rvBy):'')+(_rvAt?', '+esc(_rvAt):'')+'</div>'
+  :'';
+
+ const summaryBlock=doc.role_summary?'<h2>Role summary</h2><div class="sds-statement">'+esc(doc.role_summary)+'</div>':'';
+ const scoreLine=doc.office_holder
+  ?'<small>Office-holder override</small>'
+  :'<small>Key '+sgn(Number(doc.key_score)||0)+' / 30 · combined '+sgn(Number(doc.total_score)||0)+'</small>';
+ const seal=sds.documentSha
+  ?'<p class="small" style="opacity:.65;margin-top:10px">Document seal (SHA-256): '+esc(sds.documentSha)+'</p>'
+  :'';
+
  const html='<div class="sds"><div class="sds-toolbar"><button class="btn sec" onclick="closeSDS()">Close</button><button class="btn" onclick="window.print()">Print / Save PDF</button></div><div class="sds-body">'+
-  '<div class="sds-head"><div class="sds-logo">ascend<span>.</span></div><div class="sds-kicker">Status Determination Statement<br>'+sds.ref+'</div></div>'+
+  '<div class="sds-head"><div class="sds-logo">ascend<span>.</span></div><div class="sds-kicker">Status Determination Statement<br>'+esc(sds.ref)+'</div></div>'+
   '<h1>Status Determination Statement</h1><p class="small">Issued under the off-payroll working rules (Chapter 10, Part 2 ITEPA 2003).</p>'+
-  '<div class="meta"><div><b>Worker / PSC</b>'+esc(w.worker)+'</div><div><b>Role / assignment</b>'+esc(w.role)+'</div><div><b>End-hirer (client)</b>'+esc(TENANT.name)+'</div><div><b>SDS reference</b>'+sds.ref+'</div><div><b>Determination date</b>'+fmtDate(sds.issuedOn)+'</div><div><b>Ruleset</b>'+RULESET_VERSION+'</div></div>'+
-  '<div class="sds-verdict '+vm[0]+'">'+vm[1]+(w.full&&!w.office?'<small>Key '+sgn(w.key)+' / 30 · combined '+sgn(w.total)+'</small>':w.office?'<small>Office-holder override</small>':'')+'</div>'+roleSummaryBlock(w)+
+  '<div class="meta"><div><b>Worker / PSC</b>'+esc(doc.worker)+'</div><div><b>Role / assignment</b>'+esc(doc.role_title)+'</div><div><b>End-hirer (client)</b>'+esc(doc.client_name)+'</div><div><b>SDS reference</b>'+esc(sds.ref)+'</div><div><b>Determination date</b>'+fmtDate(sds.issuedOn)+'</div><div><b>Ruleset</b>'+esc(doc.ruleset_version)+'</div></div>'+
+  '<div class="sds-verdict '+vm[0]+'">'+esc(doc.verdict_label||vm[1])+scoreLine+'</div>'+summaryBlock+
   reviewerBlock+
   reasons+ev+
-  '<h2>Statement of reasonable care</h2><div class="sds-statement">This determination applied and recorded the established status principles against this worker’s actual engagement. Each answer carries a rationale where provided; borderline cases are referred to a qualified specialist before any statement issues; and this determination will be reviewed within 12 months or on any material change to role, rate or working practices.</div>'+
+  '<h2>Statement of reasonable care</h2><div class="sds-statement">'+esc(st.reasonable_care||'')+'</div>'+
   '<h2>Review</h2><p class="small">Review by <b>'+fmtDate(sds.reviewBy)+'</b> (12 months), or sooner on material change.</p>'+
-  '<h2>If the worker disagrees</h2><p class="small">The worker or fee-payer may make representations. The end-hirer will consider them and respond within <b>45 days</b>.</p>'+
-  '<div class="sds-sign"><div><b style="font-size:10.5px;color:var(--muted)">DETERMINED BY (END-HIRER)</b><div class="line">'+esc(TENANT.name)+' &mdash; name &amp; position</div></div><div><b style="font-size:10.5px;color:var(--muted)">DATE</b><div class="line">'+fmtDate(sds.issuedOn)+'</div></div></div>'+
-  '<div class="sds-foot">Produced using the Ascend IR35 Workbench (Ascend Workforce Solutions IP), ruleset '+RULESET_VERSION+'. Decision-support, not legal advice. This determination is made by the end-hirer ('+esc(TENANT.name)+'), who remains legally responsible for it.</div>'+
+  '<h2>If the worker disagrees</h2><p class="small">'+esc(st.disagreement||'')+'</p>'+
+  '<div class="sds-sign"><div><b style="font-size:10.5px;color:var(--muted)">DETERMINED BY (END-HIRER)</b><div class="line">'+esc(doc.client_name)+' &mdash; name &amp; position</div></div><div><b style="font-size:10.5px;color:var(--muted)">DATE</b><div class="line">'+fmtDate(sds.issuedOn)+'</div></div></div>'+
+  '<div class="sds-foot">'+esc(st.footer||'')+'</div>'+seal+
   '</div></div>';
- const ov=document.getElementById('sdsOverlay');ov.innerHTML=html;ov.classList.add('show');
+ ov.innerHTML=html;ov.classList.add('show');
 }
+
 function closeSDS(){const ov=document.getElementById('sdsOverlay');ov.classList.remove('show');ov.innerHTML='';}
 
 /* ============================== INIT ============================== */
@@ -946,10 +1081,9 @@ const SUMM={
  'AS-2333':'M&E commissioning engineer on a six-month property fit-out programme, splitting time between site and remote working. The contractor decides technical method but works to the client’s overall commissioning programme, with core site attendance on commissioning days. A substitution clause exists but requires client approval and is untested. Mutuality is weak. The indicators are finely balanced across the key tests, so the case is referred for review rather than auto-determined.',
  'AS-2334':'Interim Finance Director engaged for a nine-month, board-level assignment. The individual is appointed as a statutory director of the client and registered at Companies House for the duration. As a statutory office-holder, the engagement falls automatically inside IR35 under the office-holder rule, irrespective of the wider working practices.'
 };
-function roleSummaryBlock(w){
- var s=SUMM[w.ref]||('Engagement of '+(w.worker||'the worker')+' as '+(w.role||'a contractor')+(w.engagement?' — '+w.engagement+'.':'.')+' Assessed against this worker’s actual working practices under the established status tests; see the reasons below.');
- return '<h2>Role summary</h2><div class="sds-statement">'+esc(s)+'</div>';
-}
+/* B-08: roleSummaryBlock() deleted. It built the role summary from the LIVE
+   worker row every time the statement was opened. The summary is now resolved
+   once, at issue, by sdsSummaryText() and stored in the document. */
 
 function initShell(){
  /* B-06: the demo role-picker and loginAs() are deleted. A control that lets a signed-in user
@@ -1104,7 +1238,26 @@ async function signOff(ref){
  if(!dec){alert('Select a decision.');return;}
  if(!rea){alert('Reasoning is mandatory \u2014 a bare verdict is weak reasonable-care evidence.');return;}
  if(r0&&!canActStage(CURRENT_USER&&CURRENT_USER.role,r0.stage||1)){alert('Only the designated reviewer for this stage can sign off.');return;}
- const r=await window.__sb.rpc('record_review_decision',{p_worker_ref:ref,p_decision:dec,p_reasoning:rea});
+ /* B-08. 'Needs more info' and 'Remains borderline' issue nothing, so they
+    send nothing. Outside and Inside DO issue a statement and must carry it.
+    The scores come from the ONE engine over the worker's answers as they
+    stand at sign-off - which is the moment of issue. If the worker was
+    assessed under an older ruleset than the one loaded, the database refuses
+    the sign-off rather than releasing a statement whose reasons were computed
+    under different weights; rescore first. */
+ var _doc=null;
+ if(dec==='Outside'||dec==='Inside'){
+  const w=DB.worker(ref);
+  if(!w){alert('Worker record not found \u2014 reload and try again.');return;}
+  try{
+   _doc=buildSdsDoc({worker:w.worker, role:w.role, d:assess(w.answers,RULESET),
+    evidence:w.evidence||{}, summary:sdsSummaryText(w.worker,w.role,w.engagement),
+    outcomeOverride:(dec==='Outside')?'out':'in'});
+  }catch(e){
+   wbFail('sign-off',{message:'the statement could not be prepared ('+((e&&e.message)||e)+')'});return;
+  }
+ }
+ const r=await window.__sb.rpc('record_review_decision',{p_worker_ref:ref,p_decision:dec,p_reasoning:rea,p_document:_doc});
  if(r.error){wbFail('sign-off',r.error);return;}
  if(!await wbRefresh('sign-off')){return;} renderNav();
  if(r.data&&r.data.sds_issued){openSDS(ref);}else{go('review');}
@@ -1641,9 +1794,20 @@ function renderLibrary(){ensureRoles();
    office-holder backstop server-side. It cannot half-succeed. */
 async function commitSDS(){
  const a=lastA; if(!a) return;
+ /* B-08. Prepared BEFORE the call and sent with it, so the determination and
+    the statement land in one transaction. If it cannot be built we do not
+    issue - an SDS with no stored statement is the defect, not a degraded
+    success. */
+ try{
+  a.__doc=buildSdsDoc({worker:a.worker, role:a.role, d:a.d, evidence:a.evidence||{},
+   summary:sdsSummaryText(a.worker,a.role,'Entered via live assessment')});
+ }catch(e){
+  wbFail('determination',{message:'the statement could not be prepared ('+((e&&e.message)||e)+')'});return;
+ }
  const r=await window.__sb.rpc('issue_sds',{
   p_worker_name:a.worker, p_role_title:a.role,
   p_answers:a.answers, p_evidence:a.evidence||{},
+  p_document:a.__doc,
   p_outcome:a.d.outcome, p_key_score:a.d.keyScore, p_minor_score:a.d.minorScore,
   p_total_score:a.d.total, p_office_holder:!!a.d.office,
   p_engagement:'Entered via live assessment', p_day_rate:0, p_bucket:'Other',
