@@ -256,7 +256,7 @@ window.WB={CLIENT_ID:'orsted',TENANT_NAME:'Ørsted',TENANT_SHORT:'Orsted',SECTOR
  <p class="lead">The full contingent workforce with current status, evidence trail and review dates. Filter and export feed straight into the reporting layer.</p>
  <div class="toolbar">
   <input id="search" placeholder="Search role, ref or engagement…" oninput="renderRegister()">
-  <select id="fStatus" onchange="renderRegister()"><option value="">All statuses</option><option>Outside</option><option>Inside</option><option>Borderline</option><option>Pending</option></select>
+  <select id="fStatus" onchange="renderRegister()"><option value="">All statuses</option><option>Outside</option><option>Inside</option><option>Borderline</option><option>Awaiting contractor</option><option>Pending</option></select>
   <span class="chip" id="regCount"></span>
   <button class="btn sec" style="margin-left:auto;padding:8px 16px" onclick="exportRegisterCSV()">Export register (CSV)</button>
  </div>
@@ -838,6 +838,38 @@ function runAssess(){
    half-succeed. The duplicate commitSDS() that sat here (D-02, overridden by
    the definition further down) is deleted rather than left as a landmine
    calling DB.nextId(). */
+/* WS-03. The line manager's step: the worker goes on the register with no
+   determination and no statement, and the case waits for the contractor.
+   create_worker has existed since B-07; this is the first caller. */
+async function commitAwait(){
+ const a=lastA; if(!a) return;
+ if(!a.workerEmail){ wbFail('the assessment',{message:'no contractor email address - it cannot be saved without one'}); return; }
+ const r=await window.__sb.rpc('create_worker',{
+  p_worker_name:a.worker, p_role_title:a.role,
+  p_worker_email:a.workerEmail, p_role_ref:a.roleRef||null,
+  p_answers:a.answers, p_evidence:a.evidence||{},
+  /* outcome stays NULL on purpose. The scores are provisional and worth
+     keeping; recording an outcome would state a determination nobody has
+     made yet. */
+  p_outcome:null,
+  p_key_score:a.d.keyScore, p_minor_score:a.d.minorScore, p_total_score:a.d.total,
+  p_office_holder:!!a.d.office,
+  p_status:'Awaiting contractor', p_sds_state:'None',
+  p_engagement:'Entered via live assessment', p_day_rate:0, p_bucket:'Other',
+  p_prefill_role_ref:(PREFILL_SOURCE&&PREFILL_SOURCE.roleId)||null,
+  p_ruleset_version:RULESET_VERSION});
+ if(r.error){wbFail('the assessment',r.error);return;}
+ const out=Array.isArray(r.data)?r.data[0]:r.data;
+ if(!await wbRefresh('the assessment')){return;}
+ PREFILL_SOURCE=null; renderNav();
+ const ref=out&&out.worker_ref;
+ if(canInvite()&&ref&&window.confirm('Saved as '+ref+', awaiting the contractor.\n\nSend '+a.worker+' their invitation now?\n\nIt goes to '+a.workerEmail+'.')){
+  go('register'); await inviteContractor(ref); return;
+ }
+ alert('Saved as '+ref+'.\n\n'+a.worker+' is on the register as Awaiting contractor. No determination has been made and no statement has been issued.\n\nThe contractor is invited from the Worker Register by the platform administrator, and the determination follows once their answers are in.');
+ go('register');
+}
+
 async function commitBorder(){
  const a=lastA; if(!a) return;
  const r=await window.__sb.rpc('refer_borderline',{
@@ -1173,7 +1205,7 @@ function go(id){
  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
  const sec=document.getElementById(id);if(sec)sec.classList.add('active');
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.v===id));
- if(id==='assess'){wireAssess();var _lock=CURRENT_USER.role==='contractor'?'contractor':(CURRENT_USER.role==='linemanager'?'client':null);applyRespLock(_lock);if(CURRENT_USER.role==='contractor'){const aw=document.getElementById('aWorker');if(aw){aw.value=CURRENT_USER.name;aw.readOnly=true;}const awe=document.getElementById('aWorkerEmail');if(awe){awe.value=CURRENT_USER.email||'';awe.readOnly=true;}const arr=document.getElementById('aRoleRef');if(arr)arr.style.display='none';const w=DB.worker(CURRENT_USER.workerRef);const ar=document.getElementById('aRole');if(ar&&w){ar.value=w.role;ar.readOnly=true;}}}
+ if(id==='assess'){wireAssess();var _lock=CURRENT_USER.role==='contractor'?'contractor':(CURRENT_USER.role==='platform'?null:'client');applyRespLock(_lock);if(CURRENT_USER.role==='contractor'){const aw=document.getElementById('aWorker');if(aw){aw.value=CURRENT_USER.name;aw.readOnly=true;}const awe=document.getElementById('aWorkerEmail');if(awe){awe.value=CURRENT_USER.email||'';awe.readOnly=true;}const arr=document.getElementById('aRoleRef');if(arr)arr.style.display='none';const w=DB.worker(CURRENT_USER.workerRef);const ar=document.getElementById('aRole');if(ar&&w){ar.value=w.role;ar.readOnly=true;}}}
  else if(id==='register'){renderRegister();if(CURRENT_USER.role==='linemanager')injectLMFilter();}
  else {({dash:renderDashboard,jd:initJD,library:renderLibrary,review:renderReview,reviews:renderReviews,audit:renderAudit,analyser:initAnalyser,mine:renderMine,guides:renderGuides}[id]||function(){})();}
  window.scrollTo(0,0);
@@ -1812,7 +1844,7 @@ function runAssess(){
  if(_out.length){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">&#8505; <b>Awaiting the contractor.</b> '+_out.map(function(q){return q.code;}).join(' and ')+' '+(_out.length>1?'are':'is')+' answered by the contractor, not the hirer. '+(_out.length>1?'They score':'It scores')+' neutral until supplied, and '+(_out.length>1?'the answers are':'the answer is')+' recorded against this assessment when the contractor completes their questionnaire.</div>';}
  if(!d.office&&d.strengths.length){h+='<p class="small" style="margin-top:8px"><b>Pointing outside</b></p><ul>'+d.strengths.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
  if(!d.office&&d.risks.length){h+='<p class="small" style="margin-top:8px"><b>Pointing inside</b></p><ul>'+d.risks.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
- if(CURRENT_USER&&CURRENT_USER.role==='contractor'){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">As the contractor you do not issue your own SDS. Submitting sends your answers to the end-hirer; only the contractor-only questions ('+esc(contractorCodes())+') feed the determination \u2014 the rest is kept as supporting context.</div>'+'<div style="margin-top:12px"><button class="btn" onclick="commitContractorSubmission()">Submit my answers to the end-hirer \u2192</button></div>';}else if(d.outcome==='border'){h+='<div class="gatebox">⛔ No SDS issued. This case is gated — it routes to a qualified IR35 reviewer for sign-off before any statement can be released.</div><div style="margin-top:12px"><button class="btn" onclick="commitBorder()">Send to expert-review queue →</button></div>';}
+ if(CURRENT_USER&&CURRENT_USER.role==='contractor'){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">As the contractor you do not issue your own SDS. Submitting sends your answers to the end-hirer; only the contractor-only questions ('+esc(contractorCodes())+') feed the determination \u2014 the rest is kept as supporting context.</div>'+'<div style="margin-top:12px"><button class="btn" onclick="commitContractorSubmission()">Submit my answers to the end-hirer \u2192</button></div>';}else if(outstandingContractorQs().length){h+='<div class="gatebox">\u23f8 Nothing is issued yet. <b>'+esc(contractorCodes())+'</b> can only be answered by the contractor, and no Status Determination Statement can be issued until they have. Saving puts '+esc(lastA?lastA.worker:'this worker')+' on the register as <b>Awaiting contractor</b>; the determination is made once their answers are in.</div><div style="margin-top:12px"><button class="btn" onclick="commitAwait()">Save and await the contractor \u2192</button></div>';}else if(d.outcome==='border'){h+='<div class="gatebox">⛔ No SDS issued. This case is gated — it routes to a qualified IR35 reviewer for sign-off before any statement can be released.</div><div style="margin-top:12px"><button class="btn" onclick="commitBorder()">Send to expert-review queue →</button></div>';}
  else{h+='<div style="margin-top:12px"><button class="btn" onclick="commitSDS()">Generate SDS &amp; add to register →</button></div>';}
  h+='</div>';
  document.getElementById('assessResult').innerHTML=h;
