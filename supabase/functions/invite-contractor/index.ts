@@ -110,17 +110,25 @@ Deno.serve(async (req) => {
   }
 
   const appMeta = { role: "contractor", tenant, worker_ref: w.worker_ref, full_name: w.worker_name };
+  // WS-05: whether someone still needs to set a password is a fact about the
+  // ACCOUNT, not about how they arrived. Deciding it from the redirect URL is
+  // what let a contractor through with no password at all - supabase-js strips
+  // the fragment as soon as the client is created, so the check raced. This
+  // mark is read on every sign-in and cleared by the app when a password is
+  // set. user_metadata (not app_metadata) so the client can clear it itself;
+  // it gates a prompt, not a permission, so client-writable is correct.
+  const userMeta = { full_name: w.worker_name, must_set_password: true };
   let userId = w.contractor_user_id as string | null;
 
   try {
     if (userId) {
       // A re-send. Update the existing account rather than trying to mint a
       // second one for the same address - that is what contractor_user_id is for.
-      const { error } = await svc.auth.admin.updateUserById(userId, { app_metadata: appMeta });
+      const { error } = await svc.auth.admin.updateUserById(userId, { app_metadata: appMeta, user_metadata: userMeta });
       if (error) throw new Error(`could not update the contractor account: ${error.message}`);
     } else {
       const { data: made, error } = await svc.auth.admin.createUser({
-        email: w.worker_email, email_confirm: true, app_metadata: appMeta,
+        email: w.worker_email, email_confirm: true, app_metadata: appMeta, user_metadata: userMeta,
       });
       if (error || !made?.user) throw new Error(`could not create the contractor account: ${error?.message ?? "no user returned"}`);
       userId = made.user.id;

@@ -1471,7 +1471,22 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
   if(r.error){aerr(r.error.message||'Sign-in failed.');return;}
   await afterPassword();
  }
+ /* WS-05. Contractors are password-only (Aaron, 8 Sep). The database already
+    accepted aal1 for them; this is the half that was missing. Staff are
+    unaffected and still cannot get past MFA. */
+ async function sessionRoleKey(){
+  try{ var g=await window.__sb.auth.getSession(); var s=g&&g.data?g.data.session:null;
+       return (s&&s.user&&s.user.app_metadata&&s.user.app_metadata.role)||''; }
+  catch(e){ return ''; }
+ }
+ async function mustSetPassword(){
+  try{ var g=await window.__sb.auth.getSession(); var s=g&&g.data?g.data.session:null;
+       return !!(s&&s.user&&s.user.user_metadata&&s.user.user_metadata.must_set_password===true); }
+  catch(e){ return false; }
+ }
  async function afterPassword(){
+  if(await mustSetPassword()){showSetPassword();return;}
+  if(await sessionRoleKey()==='contractor'){finishAuth();return;}
   var aal=await window.__sb.auth.mfa.getAuthenticatorAssuranceLevel();
   var cur=aal&&aal.data?aal.data.currentLevel:null,nxt=aal&&aal.data?aal.data.nextLevel:null;
   if(cur==='aal2'){finishAuth();return;}
@@ -1487,7 +1502,11 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
   var en=await window.__sb.auth.mfa.enroll({factorType:'totp'});
   if(en.error){aerr(en.error.message||'Could not start MFA setup.');return;}
   var fid=en.data.id;var qr=en.data.totp&&en.data.totp.qr_code;
-  if(qr){document.getElementById('wbQR').innerHTML='<img alt="QR" style="width:180px;height:180px" src="'+qr+'">';}
+  /* qr is a data: URI wrapping an SVG, and that SVG contains double quotes.
+     Interpolating it into src="..." ends the attribute early - the broken
+     image and the stray "> that Aaron saw. Set the property instead. */
+  if(qr){var _q=document.getElementById('wbQR');if(_q){_q.innerHTML='';var _i=document.createElement('img');
+    _i.alt='QR';_i.style.width='180px';_i.style.height='180px';_i.src=qr;_q.appendChild(_i);}}
   document.getElementById('wbVerify').onclick=function(){verifyFactor(fid);};
   document.getElementById('wbCode').addEventListener('keydown',function(e){if(e.key==='Enter')verifyFactor(fid);});
  }
@@ -1509,7 +1528,8 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
  }
  /* First-time onboarding (invite / password reset): set a password, then MFA. */
  function showSetPassword(){
-  abody().innerHTML='<div style="font-size:13px;color:#333;margin-bottom:10px">Welcome. Set a password for your Workbench account to continue.</div>'+afield('wbNewPass','password','New password (min 8 characters)')+afield('wbNewPass2','password','Confirm password')+aerrline()+abtn('wbSetPw','Set password & continue');
+  var _who='';try{_who=(window.__sbEmail||'');}catch(e){}
+  abody().innerHTML='<div style="font-size:13px;color:#333;margin-bottom:10px">Welcome. Set a password for your Workbench account'+(_who?' <b>'+esc(_who)+'</b>':'')+' to continue.</div>'+afield('wbNewPass','password','New password (min 8 characters)')+afield('wbNewPass2','password','Confirm password')+aerrline()+abtn('wbSetPw','Set password & continue');
   document.getElementById('wbSetPw').onclick=doSetPassword;
   document.getElementById('wbNewPass2').addEventListener('keydown',function(e){if(e.key==='Enter')doSetPassword();});
   setTimeout(function(){var x=document.getElementById('wbNewPass');if(x)x.focus();},80);
@@ -1519,23 +1539,34 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
   if(p1.length<8){aerr('Password must be at least 8 characters.');return;}
   if(p1!==p2){aerr('Passwords do not match.');return;}
   var b=document.getElementById('wbSetPw');b.disabled=true;b.textContent='Saving…';
-  var r=await window.__sb.auth.updateUser({password:p1});
+  /* One call: the password and the mark move together, so there is no window
+     in which the password is set and the account still asks for one. */
+  var r=await window.__sb.auth.updateUser({password:p1,data:{must_set_password:false}});
   b.disabled=false;b.textContent='Set password & continue';
   if(r.error){aerr(r.error.message||'Could not set password.');return;}
+  if(await sessionRoleKey()==='contractor'){finishAuth();return;}
   await afterPassword();
  }
  /* entry: handle invite/reset, else resume an aal2 session, else show sign-in */
  var INVITE_FLOW = /type=(invite|recovery)/.test((window.location.hash||'')+(window.location.search||''));
  /* Surface an OAuth error handed back on the redirect (e.g. sign-ups off, provider not enabled) */
- var OAUTH_ERR='';try{var _h=(window.location.hash||'')+'&'+(window.location.search||'');var _m=_h.match(/error_description=([^&]+)/);if(_m){OAUTH_ERR=decodeURIComponent(_m[1].replace(/\+/g,' '));}else if(/[?#&]error=/.test(_h)){OAUTH_ERR='Google sign-in is not available yet — please use your email and password.';}}catch(e){}
+ var OAUTH_ERR='';try{var _h=(window.location.hash||'')+'&'+(window.location.search||'');var _m=_h.match(/error_description=([^&]+)/);if(_m){OAUTH_ERR=decodeURIComponent(_m[1].replace(/\+/g,' '));}else if(/otp_expired|access_denied|invalid_request/.test(_h)){OAUTH_ERR='That sign-in link has already been used, or has expired. Links are single use for security. Sign in below with your email address and the password you set — or ask for a new link if you have not set one yet.';}
+   else if(/[?#&]error=/.test(_h)){OAUTH_ERR='Google sign-in is not available yet — please use your email and password.';}}catch(e){}
  (function boot(){
   var tries=0;(function wait(){
    if(window.supabase&&window.supabase.createClient){
     try{if(!window.__sb)window.__sb=window.supabase.createClient(WB.SUPABASE_URL,WB.SUPABASE_ANON_KEY);}catch(e){fatal('Store configuration error. Please contact Aaron.');return;}
     (async function(){
      try{var s=await window.__sb.auth.getSession();var sess=s&&s.data?s.data.session:null;
+      try{window.__sbEmail=(sess&&sess.user&&sess.user.email)||'';}catch(e){}
       if(INVITE_FLOW&&sess){authScreen();showSetPassword();return;}
-      if(sess){var aal=await window.__sb.auth.mfa.getAuthenticatorAssuranceLevel();
+      if(sess){
+       var _rk=(sess.user&&sess.user.app_metadata&&sess.user.app_metadata.role)||'';
+       /* WS-05b: a fact about the account, not about the URL they arrived on. */
+       if(sess.user&&sess.user.user_metadata&&sess.user.user_metadata.must_set_password===true){
+        authScreen();showSetPassword();return;}
+       if(_rk==='contractor'){hydrateAndStart();return;}
+       var aal=await window.__sb.auth.mfa.getAuthenticatorAssuranceLevel();
        if(aal&&aal.data&&aal.data.currentLevel==='aal2'){hydrateAndStart();return;}
        authScreen();await afterPassword();return;}
      }catch(e){}
