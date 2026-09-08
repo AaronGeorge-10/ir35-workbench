@@ -8,3 +8,4 @@ exclude:
   - assets
   - README.md
   - _config.yml
+  - supabase

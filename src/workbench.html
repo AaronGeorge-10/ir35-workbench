@@ -748,16 +748,14 @@ function inviteCell(w){
  return bits.join('');
 }
 
-async function inviteContractor(ref){
- if(!canInvite()) return;
- const w = DB.worker(ref);
- if(!w){ alert('Worker record not found \u2014 reload and try again.'); return; }
- if(!w.workerEmail){ alert(ref+' has no email address on file, so there is nobody to invite.'); return; }
- const again = w.invitedAt ? ('\n\nThis contractor has already been invited '+w.inviteCount+' time(s), most recently '+fmtDate(String(w.invitedAt).slice(0,10))+'.') : '';
- if(!window.confirm('Send '+esc(w.worker)+' an invitation to complete their part of the assessment?\n\nIt goes to '+w.workerEmail+'.'+again)) return;
+/* ONE send path. The automatic send on save and the manual Re-send link both
+   come through here, so there is no second copy to drift (D-02's lesson).
+   quiet:true means the caller reports the outcome itself. */
+async function sendInvite(ref, opts){
+ opts = opts || {};
  let s=null;
  try{ s=(await window.__sb.auth.getSession()).data.session; }catch(e){}
- if(!s){ wbFail('the invitation',{message:'your session has expired \u2014 sign in again'}); return; }
+ if(!s) return {ok:false, message:'Your session has expired \u2014 sign in again.'};
  let res, body;
  try{
   res = await fetch(WB.SUPABASE_URL+'/functions/v1/invite-contractor',{
@@ -767,14 +765,28 @@ async function inviteContractor(ref){
   });
   body = await res.json();
  }catch(e){
-  wbFail('the invitation',{message:'the invitation service could not be reached ('+((e&&e.message)||e)+')'}); return;
+  return {ok:false, message:'The invitation service could not be reached ('+((e&&e.message)||e)+').'};
  }
- if(!res.ok || body.error){ wbFail('the invitation',{message:(body&&body.error)||('HTTP '+res.status)}); return; }
- if(!await wbRefresh('the invitation')) return;
+ if(!res.ok || body.error) return {ok:false, message:(body&&body.error)||('HTTP '+res.status)};
+ await wbRefresh('the invitation');
  renderNav();
- alert(body.duplicate
+ return {ok:true, sent_to:body.sent_to, due:body.due, invite_count:body.invite_count, duplicate:!!body.duplicate};
+}
+
+/* The manual link on the register - a deliberate re-send, or a retry after a
+   failed automatic one. Platform seat only. */
+async function inviteContractor(ref){
+ if(!canInvite()) return;
+ const w = DB.worker(ref);
+ if(!w){ alert('Worker record not found \u2014 reload and try again.'); return; }
+ if(!w.workerEmail){ alert(ref+' has no email address on file, so there is nobody to invite.'); return; }
+ const again = w.invitedAt ? ('\n\nThey have already been invited '+w.inviteCount+' time(s), most recently '+fmtDate(String(w.invitedAt).slice(0,10))+'.') : '';
+ if(!window.confirm('Send '+w.worker+' an invitation to complete their part of the assessment?\n\nIt goes to '+w.workerEmail+'.'+again)) return;
+ const r = await sendInvite(ref);
+ if(!r.ok){ wbFail('the invitation',{message:r.message}); return; }
+ alert(r.duplicate
    ? 'An invitation was sent moments ago \u2014 a second one was not sent.'
-   : 'Invitation '+body.invite_count+' sent to '+body.sent_to+'.\n\nResponse due '+body.due+'. No SDS can be issued until they complete their part.');
+   : 'Invitation '+r.invite_count+' sent to '+r.sent_to+'.\n\nResponse due '+r.due+'. No SDS can be issued until they complete their part.');
 }
 
 function renderRegister(){
@@ -857,14 +869,28 @@ async function commitAwait(){
   p_ruleset_version:RULESET_VERSION});
  if(r.error){wbFail('the assessment',r.error);return;}
  const out=Array.isArray(r.data)?r.data[0]:r.data;
- if(!await wbRefresh('the assessment')){return;}
- PREFILL_SOURCE=null; renderNav();
+ PREFILL_SOURCE=null;
  const ref=out&&out.worker_ref;
- if(canInvite()&&ref&&window.confirm('Saved as '+ref+', awaiting the contractor.\n\nSend '+a.worker+' their invitation now?\n\nIt goes to '+a.workerEmail+'.')){
-  go('register'); await inviteContractor(ref); return;
+ /* The refresh is a READ. Gating the invitation on it would mean a transient
+    read failure silently costs the contractor their invitation while the
+    worker record sits there awaiting one - so the send comes first and the
+    refresh is best-effort. */
+ if(!ref){ alert('Saved, but the reference did not come back \u2014 check the Worker Register before assessing again.'); go('register'); return; }
+ /* WS-04: the invitation goes out on save. The line manager's involvement ends
+    at submission, so it cannot depend on them, or anyone else, pressing a
+    second button. */
+ const sent=await sendInvite(ref,{quiet:true});
+ try{ await wbRefresh('the assessment'); }catch(e){}
+ /* Nothing after the write may be allowed to throw before the user is told
+    what happened - a silent failure here looks exactly like success. */
+ try{ renderNav(); go('register'); }catch(e){}
+ if(sent && sent.ok){
+  alert('Saved as '+ref+' and the invitation has been sent to '+sent.sent_to+'.\n\n'+a.worker+' is on the register as Awaiting contractor. No determination has been made and no statement has been issued \u2014 that follows once their answers are in.\n\nThey have been asked to reply by '+sent.due+'.');
+ }else{
+  /* The assessment IS saved. Losing it because the email failed would be the
+     worse outcome by far - so this says plainly what did and did not happen. */
+  alert('Saved as '+ref+', BUT THE INVITATION WAS NOT SENT.\n\n'+((sent&&sent.message)||'The invitation service could not be reached.')+'\n\n'+a.worker+' is on the register as Awaiting contractor and the assessment is safe. Nothing has reached the contractor, so the clock has not started. Re-send it from the Worker Register once the problem is fixed.');
  }
- alert('Saved as '+ref+'.\n\n'+a.worker+' is on the register as Awaiting contractor. No determination has been made and no statement has been issued.\n\nThe contractor is invited from the Worker Register by the platform administrator, and the determination follows once their answers are in.');
- go('register');
 }
 
 async function commitBorder(){
@@ -1838,10 +1864,10 @@ function runAssess(){
  h+='<p style="font-size:13px">'+d.msg+'</p>';
  if(divergence){h+='<div class="gatebox" style="background:#fff7e6;border-color:#f0c36d;color:#7a5b00">⚠ <b>Diverges from the role library.</b> Role “'+esc(divergence.role)+'” leans <b>'+esc(divergence.roleLean)+'</b>, but this worker assessed <b>'+esc(divergence.workerLean)+'</b>. The divergence is recorded for the varied-group consistency check.</div>';}
  const _out=outstandingContractorQs();
- if(_out.length){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">&#8505; <b>Awaiting the contractor.</b> '+_out.map(function(q){return q.code;}).join(' and ')+' '+(_out.length>1?'are':'is')+' answered by the contractor, not the hirer. '+(_out.length>1?'They score':'It scores')+' neutral until supplied, and '+(_out.length>1?'the answers are':'the answer is')+' recorded against this assessment when the contractor completes their questionnaire.</div>';}
+ if(_out.length){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">&#8505; <b>Awaiting the contractor.</b> Further questions are answered by the contractor, not the hirer. Their answers are recorded against this assessment when the contractor completes their questionnaire.</div>';}
  if(!d.office&&d.strengths.length){h+='<p class="small" style="margin-top:8px"><b>Pointing outside</b></p><ul>'+d.strengths.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
  if(!d.office&&d.risks.length){h+='<p class="small" style="margin-top:8px"><b>Pointing inside</b></p><ul>'+d.risks.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
- if(CURRENT_USER&&CURRENT_USER.role==='contractor'){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">As the contractor you do not issue your own SDS. Submitting sends your answers to the end-hirer; only the contractor-only questions ('+esc(contractorCodes())+') feed the determination \u2014 the rest is kept as supporting context.</div>'+'<div style="margin-top:12px"><button class="btn" onclick="commitContractorSubmission()">Submit my answers to the end-hirer \u2192</button></div>';}else if(outstandingContractorQs().length){h+='<div class="gatebox">\u23f8 Nothing is issued yet. <b>'+esc(contractorCodes())+'</b> can only be answered by the contractor, and no Status Determination Statement can be issued until they have. Saving puts '+esc(lastA?lastA.worker:'this worker')+' on the register as <b>Awaiting contractor</b>; the determination is made once their answers are in.</div><div style="margin-top:12px"><button class="btn" onclick="commitAwait()">Save and await the contractor \u2192</button></div>';}else if(d.outcome==='border'){h+='<div class="gatebox">⛔ No SDS issued. This case is gated — it routes to a qualified IR35 reviewer for sign-off before any statement can be released.</div><div style="margin-top:12px"><button class="btn" onclick="commitBorder()">Send to expert-review queue →</button></div>';}
+ if(CURRENT_USER&&CURRENT_USER.role==='contractor'){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">As the contractor you do not issue your own SDS. Submitting sends your answers to the end-hirer; only the contractor-only questions ('+esc(contractorCodes())+') feed the determination \u2014 the rest is kept as supporting context.</div>'+'<div style="margin-top:12px"><button class="btn" onclick="commitContractorSubmission()">Submit my answers to the end-hirer \u2192</button></div>';}else if(outstandingContractorQs().length){h+='<div class="gatebox">\u23f8 Nothing is issued yet. Some questions can only be answered by the contractor, and no Status Determination Statement can be issued until they have. Saving puts <b>'+esc(lastA?lastA.worker:'this worker')+'</b> on the register as <b>Awaiting contractor</b>; the determination is made once their answers are in. Please click the save and await the contractor button below.</div><div style="margin-top:12px"><button class="btn" onclick="commitAwait()">Save and await the contractor \u2192</button></div>';}else if(d.outcome==='border'){h+='<div class="gatebox">⛔ No SDS issued. This case is gated — it routes to a qualified IR35 reviewer for sign-off before any statement can be released.</div><div style="margin-top:12px"><button class="btn" onclick="commitBorder()">Send to expert-review queue →</button></div>';}
  else{h+='<div style="margin-top:12px"><button class="btn" onclick="commitSDS()">Generate SDS &amp; add to register →</button></div>';}
  h+='</div>';
  document.getElementById('assessResult').innerHTML=h;
