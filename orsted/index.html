@@ -260,7 +260,7 @@ window.WB={CLIENT_ID:'orsted',TENANT_NAME:'Ørsted',TENANT_SHORT:'Orsted',SECTOR
   <span class="chip" id="regCount"></span>
   <button class="btn sec" style="margin-left:auto;padding:8px 16px" onclick="exportRegisterCSV()">Export register (CSV)</button>
  </div>
- <div class="card" style="padding:6px 18px 14px"><table><thead><tr><th>Ref</th><th>Worker / PSC</th><th>Role</th><th>Engagement</th><th>Day rate</th><th>Status</th><th>SDS</th><th>Next review</th></tr></thead><tbody id="regBody"></tbody></table></div>
+ <div class="card" style="padding:6px 18px 14px"><table><thead><tr><th>Ref</th><th>Worker / PSC</th><th>Role</th><th>Engagement</th><th>Day rate</th><th>Status</th><th>SDS</th><th>Contractor</th><th>Next review</th></tr></thead><tbody id="regBody"></tbody></table></div>
 </section>
 
 <section class="view" id="review">
@@ -561,6 +561,9 @@ function workerRowToView(r){return{
  id:r.id, version:r.version, tenantId:r.client_id,
  ref:r.worker_ref, worker:r.worker_name, role:r.role_title,
  roleRef:r.role_ref||null, workerEmail:r.worker_email||null,
+ contractorUserId:r.contractor_user_id||null, invitedAt:r.invited_at||null,
+ inviteSentTo:r.invite_sent_to||null, inviteCount:r.invite_count||0,
+ inviteLastError:r.invite_last_error||null,
  engagement:r.engagement||'', rate:(r.day_rate==null?0:Number(r.day_rate)), bucket:r.bucket||'Other',
  answers:r.answers||{}, evidence:r.evidence||{},
  hirerAnswers:r.hirer_answers||{}, contractorAnswers:r.contractor_answers||{},
@@ -723,12 +726,66 @@ function renderDashboard(){
 function kpi(l,v,d,dir){return '<div class="kpi"><div class="label">'+l+'</div><div class="val">'+v+'</div><div class="delta '+(dir||'')+'">'+d+'</div></div>';}
 
 /* ============================== REGISTER ============================== */
+/* ---- WS-02c: contractor invitation -------------------------------------
+   Only the platform seat can send one for now (Aaron, 8 Sep) - the control is
+   not rendered for anyone else, and the Edge Function refuses anyone else
+   regardless, so hiding it is convenience and not the boundary.               */
+function canInvite(){ return !!(CURRENT_USER && CURRENT_USER.role === 'platform'); }
+
+function inviteCell(w){
+ var bits = [];
+ if(w.invitedAt){
+  bits.push('<span class="pill p-pending">Invited '+fmtDate(String(w.invitedAt).slice(0,10))+'</span>');
+  if(w.inviteCount>1) bits.push('<span class="small"> \u00d7'+w.inviteCount+'</span>');
+ } else {
+  bits.push('<span class="small">Not invited</span>');
+ }
+ /* A failure is shown in the register, not buried in a log. A bounce nobody
+    sees is a seven-day clock running on an invitation that never arrived. */
+ if(w.inviteLastError){
+  bits.push('<div class="small" style="color:#b42318" title="'+esc(w.inviteLastError)+'">\u26a0 last attempt failed</div>');
+ }
+ if(canInvite() && w.workerEmail){
+  bits.push('<div style="margin-top:4px"><a href="#" style="color:var(--teal);font-weight:600" onclick="inviteContractor(\''+w.ref+'\');return false;">'+(w.invitedAt?'Re-send':'Invite')+' \u2192</a></div>');
+ }
+ return bits.join('');
+}
+
+async function inviteContractor(ref){
+ if(!canInvite()) return;
+ const w = DB.worker(ref);
+ if(!w){ alert('Worker record not found \u2014 reload and try again.'); return; }
+ if(!w.workerEmail){ alert(ref+' has no email address on file, so there is nobody to invite.'); return; }
+ const again = w.invitedAt ? ('\n\nThis contractor has already been invited '+w.inviteCount+' time(s), most recently '+fmtDate(String(w.invitedAt).slice(0,10))+'.') : '';
+ if(!window.confirm('Send '+esc(w.worker)+' an invitation to complete their part of the assessment?\n\nIt goes to '+w.workerEmail+'.'+again)) return;
+ let s=null;
+ try{ s=(await window.__sb.auth.getSession()).data.session; }catch(e){}
+ if(!s){ wbFail('the invitation',{message:'your session has expired \u2014 sign in again'}); return; }
+ let res, body;
+ try{
+  res = await fetch(WB.SUPABASE_URL+'/functions/v1/invite-contractor',{
+   method:'POST',
+   headers:{'Authorization':'Bearer '+s.access_token,'apikey':WB.SUPABASE_ANON_KEY,'Content-Type':'application/json'},
+   body:JSON.stringify({worker_ref:ref})
+  });
+  body = await res.json();
+ }catch(e){
+  wbFail('the invitation',{message:'the invitation service could not be reached ('+((e&&e.message)||e)+')'}); return;
+ }
+ if(!res.ok || body.error){ wbFail('the invitation',{message:(body&&body.error)||('HTTP '+res.status)}); return; }
+ if(!await wbRefresh('the invitation')) return;
+ renderNav();
+ alert(body.duplicate
+   ? 'An invitation was sent moments ago \u2014 a second one was not sent.'
+   : 'Invitation '+body.invite_count+' sent to '+body.sent_to+'.\n\nResponse due '+body.due+'. No SDS can be issued until they complete their part.');
+}
+
 function renderRegister(){
  const ws=DB.workers();const q=(document.getElementById('search').value||'').toLowerCase();const f=document.getElementById('fStatus').value;
  const _mine=(CURRENT_USER&&CURRENT_USER.role==='linemanager'&&document.getElementById('lmMine')&&document.getElementById('lmMine').checked)?CURRENT_USER.myRefs:null;const rows=ws.filter(w=>(!f||w.status===f)&&(!q||(w.ref+w.worker+w.role+w.engagement).toLowerCase().includes(q))&&(!_mine||_mine.indexOf(w.ref)>=0));
  document.getElementById('regBody').innerHTML=rows.map(w=>{
   const sdsLink=w.sdsState==='Issued'?'<a href="#" style="color:var(--teal);font-weight:600" onclick="openSDS(\''+w.ref+'\');return false;">View SDS</a>':(w.sdsState==='Referred'?'<span class="pill p-border">Referred</span>':'<span class="small">—</span>');
-  return '<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.worker)+'</td><td class="small">'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>£'+w.rate+'</td><td>'+pill(w.status)+'</td><td class="small">'+sdsLink+'</td><td class="small">'+(w.nextReview?fmtDate(w.nextReview):'—')+'</td></tr>';
+  return '<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.worker)+'</td><td class="small">'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>£'+w.rate+'</td><td>'+pill(w.status)+'</td><td class="small">'+sdsLink+'</td><td class="small">'+inviteCell(w)+'</td><td class="small">'+(w.nextReview?fmtDate(w.nextReview):'—')+'</td></tr>';
  }).join('');
  document.getElementById('regCount').textContent=rows.length+' of '+ws.length+' workers';
 }
