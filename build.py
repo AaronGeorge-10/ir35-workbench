@@ -3,10 +3,19 @@
 """
 IR35 Workbench — per-client build.
 
-There is ONE source file: src/workbench.html.
-Every client instance is GENERATED from it plus clients/<name>.json.
+There is ONE source file per artefact:
+    src/workbench.html        the application
+    src/guide_hirer.html      the hirer user guide
+    src/guide_contractor.html the contractor user guide
+
+Every client instance is GENERATED from those plus clients/<name>.json.
 Never hand-edit a generated folder: your change will be overwritten on the
-next build, and the three builds will drift apart again (debt register B-03).
+next build, and the builds will drift apart again (debt register B-03).
+
+The guides are generated for the same reason the application is. They used to
+be PDFs sitting in assets/ and copied verbatim into every client folder, so
+they carried one client's name, URL and access code into every other client's
+build, and went stale the moment the application changed (debt register B-09).
 
 Usage:
     python3 build.py            # rebuild every client in clients/
@@ -14,35 +23,85 @@ Usage:
     python3 build.py --check    # verify the committed output matches a fresh
                                 # build; exit 1 if not. Use this in review.
 """
-import io, json, os, shutil, sys, hashlib
+import io, json, os, re, shutil, sys, hashlib
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(ROOT, 'src', 'workbench.html')
 CLIENTS = os.path.join(ROOT, 'clients')
 ASSETS = os.path.join(ROOT, 'assets')
+CNAME = os.path.join(ROOT, 'CNAME')
 
 REQUIRED = ['folder', 'CLIENT_ID', 'TENANT_NAME', 'TENANT_SHORT', 'SECTOR',
             'ADVISER_NAME', 'INTERNAL_REVIEWER', 'SUPABASE_URL',
             'SUPABASE_ANON_KEY', 'ANALYZER_URL']
 
+# source file -> path inside the client folder
+GUIDES = [('guide_hirer.html', os.path.join('guides', 'hirer.html')),
+          ('guide_contractor.html', os.path.join('guides', 'contractor.html'))]
+
 BANNER = ('<!-- GENERATED FILE - DO NOT EDIT.\n'
-          '     Source: src/workbench.html + clients/%s.json\n'
+          '     Source: src/%s + clients/%s.json\n'
           '     Rebuild: python3 build.py %s -->\n')
 
 
-def render(cfg, name):
+def site_base():
+    """The live origin, taken from CNAME so it cannot drift from what is served."""
+    host = io.open(CNAME, encoding='utf-8').read().strip()
+    if not host:
+        sys.exit('FAIL: CNAME is empty; cannot derive the live URL')
+    return 'https://' + host
+
+
+def ruleset_version():
+    """Read the version out of the application, so a guide can never quote a
+       ruleset the application is no longer running."""
+    s = io.open(SRC, encoding='utf-8').read()
+    m = re.search(r"RULESET_VERSION\s*=\s*'([^']+)'", s)
+    if not m:
+        sys.exit('FAIL: RULESET_VERSION not found in src/workbench.html')
+    return m.group(1)
+
+
+def tokens(cfg):
+    """Every substitutable value: the client config plus derived values."""
+    t = dict((k, cfg[k]) for k in REQUIRED if k != 'folder')
+    t['CLIENT_URL'] = '%s/%s/' % (site_base(), cfg['folder'])
+    t['RULESET_VERSION'] = ruleset_version()
+    return t
+
+
+def subst(text, t, where):
+    for key, val in t.items():
+        text = text.replace('{{%s}}' % key, val)
+    left = [ln for ln in text.split('\n') if '{{' in ln and '}}' in ln]
+    if left:
+        sys.exit('FAIL: unsubstituted token remains in %s: %s' % (where, left[0].strip()[:120]))
+    return text
+
+
+def render_app(cfg, name):
     s = io.open(SRC, encoding='utf-8').read()
     for key in REQUIRED:
         if key == 'folder':
             continue
-        token = '{{%s}}' % key
-        if token not in s:
-            sys.exit('FAIL: token %s not present in src/workbench.html' % token)
-        s = s.replace(token, cfg[key])
-    left = [ln for ln in s.split('\n') if '{{' in ln and '}}' in ln]
-    if left:
-        sys.exit('FAIL: unsubstituted token remains: %s' % left[0][:120])
-    return BANNER % (name, name) + s
+        if '{{%s}}' % key not in s:
+            sys.exit('FAIL: token {{%s}} not present in src/workbench.html' % key)
+    body = subst(s, tokens(cfg), 'src/workbench.html')
+    return BANNER % ('workbench.html', name, name) + body
+
+
+def render_guide(cfg, name, src_name):
+    path = os.path.join(ROOT, 'src', src_name)
+    body = subst(io.open(path, encoding='utf-8').read(), tokens(cfg), 'src/' + src_name)
+    return BANNER % (src_name, name, name) + body
+
+
+def outputs(cfg, name):
+    """[(path relative to the client folder, expected content), ...]"""
+    out = [('index.html', render_app(cfg, name))]
+    for src_name, rel in GUIDES:
+        out.append((rel, render_guide(cfg, name, src_name)))
+    return out
 
 
 def load(name):
@@ -65,20 +124,26 @@ def clients():
 def build(name, check=False):
     cfg = load(name)
     out_dir = os.path.join(ROOT, cfg['folder'])
-    out_file = os.path.join(out_dir, 'index.html')
-    html = render(cfg, name)
+    files = outputs(cfg, name)
 
     if check:
-        if not os.path.exists(out_file):
-            print('  MISSING  %s' % out_file); return False
-        cur = io.open(out_file, encoding='utf-8').read()
-        ok = (cur == html)
-        print('  %s  %s' % ('OK      ' if ok else 'STALE   ', cfg['folder'] + '/index.html'))
+        ok = True
+        for rel, html in files:
+            p = os.path.join(out_dir, rel)
+            if not os.path.exists(p):
+                print('  MISSING  %s/%s' % (cfg['folder'], rel.replace(os.sep, '/')))
+                ok = False
+                continue
+            same = (io.open(p, encoding='utf-8').read() == html)
+            print('  %s  %s/%s' % ('OK      ' if same else 'STALE   ',
+                                   cfg['folder'], rel.replace(os.sep, '/')))
+            ok = ok and same
         return ok
 
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
-    io.open(out_file, 'w', encoding='utf-8', newline='').write(html)
+    # assets first: a directory in assets/ replaces its counterpart wholesale,
+    # so generated output must be written after it, not before.
     for item in sorted(os.listdir(ASSETS)):
         src_p = os.path.join(ASSETS, item)
         dst_p = os.path.join(out_dir, item)
@@ -88,9 +153,16 @@ def build(name, check=False):
             shutil.copytree(src_p, dst_p)
         else:
             shutil.copy2(src_p, dst_p)
-    digest = hashlib.sha256(html.encode('utf-8')).hexdigest()[:12]
-    print('  built    %s/index.html  (%d bytes, sha256 %s)'
-          % (cfg['folder'], len(html.encode('utf-8')), digest))
+    for rel, html in files:
+        p = os.path.join(out_dir, rel)
+        d = os.path.dirname(p)
+        if d and not os.path.isdir(d):
+            os.makedirs(d)
+        io.open(p, 'w', encoding='utf-8', newline='').write(html)
+        digest = hashlib.sha256(html.encode('utf-8')).hexdigest()[:12]
+        print('  built    %s/%s  (%d bytes, sha256 %s)'
+              % (cfg['folder'], rel.replace(os.sep, '/'),
+                 len(html.encode('utf-8')), digest))
     return True
 
 
