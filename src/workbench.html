@@ -1299,7 +1299,7 @@ function renderMine(){
  if(sds){h+='<p style="font-size:14px">Your status determination is '+pill(w.status)+'.</p><div style="margin-top:10px"><button class="btn" onclick="openSDS(\''+u.workerRef+'\')">View my Status Determination Statement →</button></div><p class="note">If you disagree, you may make representations to the end-hirer, who will respond within 45 days.</p>';}
  else if(rev){h+='<p class="small">Your assessment is <b>with a qualified reviewer</b> (borderline) — no determination has been issued yet.</p>';}
  else{h+='<p class="small">No determination issued yet.</p>';}
- h+='</div><div class="card" style="margin-top:14px"><h3><span class="dot"></span>Your questionnaire</h3>'+(hasContractorInput(w)?'<p class="small">Submitted <b>'+esc(w.contractorSubmittedOn)+'</b>. Your answers to <b>'+esc(contractorCodes())+'</b> are merged into the end-hirer\u2019s assessment. You can resubmit if anything has changed \u2014 it is re-merged and re-audited.</p>':'<div class="gatebox">Your answers to <b>'+esc(contractorCodes())+'</b> have not been received yet. The end-hirer cannot answer these \u2014 they score neutral until you complete them.</div>')+'<p class="small">You do not issue your own SDS; the determination is the end-hirer\u2019s.</p><div style="margin-top:10px"><button class="btn sec" onclick="go(\'assess\')">'+(hasContractorInput(w)?'Review or update my answers':'Open my questionnaire')+' →</button></div></div>';
+ h+='</div><div class="card" style="margin-top:14px"><h3><span class="dot"></span>Your questionnaire</h3>'+(hasContractorInput(w)?'<p class="small">Submitted <b>'+esc(w.contractorSubmittedOn)+'</b>. Your answers are merged into the end-hirer\u2019s assessment. You can resubmit if anything has changed \u2014 it is re-merged and re-audited.</p>':'<div class="gatebox">Your answers have not been received yet. No determination can be made until you complete your questionnaire.</div>')+'<p class="small">You do not issue your own SDS; the determination is the end-hirer\u2019s.</p><div style="margin-top:10px"><button class="btn sec" onclick="go(\'assess\')">'+(hasContractorInput(w)?'Review or update my answers':'Open my questionnaire')+' →</button></div></div>';
  document.getElementById('mine').innerHTML=h;
 }
 
@@ -1743,11 +1743,12 @@ async function commitContractorSubmission(){
  var res=r.data||{};
  try{await DB.loadAsync();}catch(e){}
  wbOk();
+ /* Aaron's wording, 8 Sep. No question codes - a contractor should not have to
+    know what C2 and M1 are - and it says plainly what happens next. */
  box.innerHTML='<div class="card"><h3><span class="dot"></span>Submitted to '+esc(TENANT.name)+'</h3>'
-  +'<p class="small">Your answers to <b>'+esc(res.codes_supplied||contractorCodes())+'</b> have been merged into assessment <b>'+esc(res.worker_ref||'')+'</b> and recorded on the audit trail. '
-  +'Your remaining answers are kept as supporting context but do not change the end-hirer\u2019s determination \u2014 the determination is theirs to make.</p>'
-  +'<p class="small">The end-hirer\u2019s system will re-check the determination against your answers. If it changes, a qualified reviewer confirms the position before anything is issued or reissued'
-  +(res.sds_already_issued?', and the statement already issued is <b>not</b> altered':'')+'.</p>'
+  +'<p class="small">Your answers have been merged into assessment <b>'+esc(res.worker_ref||'')+'</b> and recorded on the audit trail.</p>'
+  +'<p class="small">The end-hirer will check your answers and make a determination and then issue you your SDS.'
+  +(res.sds_already_issued?' The statement already issued is <b>not</b> altered; if the determination changes, a qualified reviewer confirms the position before anything is reissued.':'')+'</p>'
   +'<div style="margin-top:12px"><button class="btn sec" onclick="go(\'mine\')">Back to my IR35 status \u2192</button></div></div>';
  renderNav();
 }
@@ -1898,10 +1899,19 @@ function runAssess(){
  if(_out.length){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">&#8505; <b>Awaiting the contractor.</b> Further questions are answered by the contractor, not the hirer. Their answers are recorded against this assessment when the contractor completes their questionnaire.</div>';}
  if(!d.office&&d.strengths.length){h+='<p class="small" style="margin-top:8px"><b>Pointing outside</b></p><ul>'+d.strengths.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
  if(!d.office&&d.risks.length){h+='<p class="small" style="margin-top:8px"><b>Pointing inside</b></p><ul>'+d.risks.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
- if(CURRENT_USER&&CURRENT_USER.role==='contractor'){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">As the contractor you do not issue your own SDS. Submitting sends your answers to the end-hirer; only the contractor-only questions ('+esc(contractorCodes())+') feed the determination \u2014 the rest is kept as supporting context.</div>'+'<div style="margin-top:12px"><button class="btn" onclick="commitContractorSubmission()">Submit my answers to the end-hirer \u2192</button></div>';}else if(outstandingContractorQs().length){h+='<div class="gatebox">\u23f8 Nothing is issued yet. Some questions can only be answered by the contractor, and no Status Determination Statement can be issued until they have. Saving puts <b>'+esc(lastA?lastA.worker:'this worker')+'</b> on the register as <b>Awaiting contractor</b>; the determination is made once their answers are in. Please click the save and await the contractor button below.</div><div style="margin-top:12px"><button class="btn" onclick="commitAwait()">Save and await the contractor \u2192</button></div>';}else if(d.outcome==='border'){h+='<div class="gatebox">⛔ No SDS issued. This case is gated — it routes to a qualified IR35 reviewer for sign-off before any statement can be released.</div><div style="margin-top:12px"><button class="btn" onclick="commitBorder()">Send to expert-review queue →</button></div>';}
+ if(CURRENT_USER&&CURRENT_USER.role==='contractor'){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">As the contractor you do not issue your own SDS. Submitting sends your answers to the end-hirer, who makes the determination.</div>'+'<div style="margin-top:12px"><button class="btn" onclick="commitContractorSubmission()">Submit my answers to the end-hirer \u2192</button></div>';}else if(outstandingContractorQs().length){h+='<div class="gatebox">\u23f8 Nothing is issued yet. Some questions can only be answered by the contractor, and no Status Determination Statement can be issued until they have. Saving puts <b>'+esc(lastA?lastA.worker:'this worker')+'</b> on the register as <b>Awaiting contractor</b>; the determination is made once their answers are in. Please click the save and await the contractor button below.</div><div style="margin-top:12px"><button class="btn" onclick="commitAwait()">Save and await the contractor \u2192</button></div>';}else if(d.outcome==='border'){h+='<div class="gatebox">⛔ No SDS issued. This case is gated — it routes to a qualified IR35 reviewer for sign-off before any statement can be released.</div><div style="margin-top:12px"><button class="btn" onclick="commitBorder()">Send to expert-review queue →</button></div>';}
  else{h+='<div style="margin-top:12px"><button class="btn" onclick="commitSDS()">Generate SDS &amp; add to register →</button></div>';}
  h+='</div>';
- document.getElementById('assessResult').innerHTML=h;
+ var _res=document.getElementById('assessResult');
+ _res.innerHTML=h;
+ /* The Run button sits at the bottom of a long questionnaire and the result
+    renders at the top, so without this the answer appears somewhere the reader
+    is not looking. Scroll the page up, then make sure the result itself is in
+    view on a narrow screen where it stacks below. */
+ try{
+  window.scrollTo({top:0,behavior:'smooth'});
+  setTimeout(function(){ try{ _res.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} },350);
+ }catch(e){ try{ _res.scrollIntoView(); }catch(e2){} }
 }
 
 function renderRoleResult(answers,evidence,d){
