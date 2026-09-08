@@ -115,7 +115,8 @@ window.WB={CLIENT_ID:'{{CLIENT_ID}}',TENANT_NAME:'{{TENANT_NAME}}',TENANT_SHORT:
   .sig .tag.in{background:var(--red-bg);color:var(--red)} .sig .tag.out{background:var(--green-bg);color:var(--green)}
   .jdlean{padding:13px 15px;border-radius:10px;margin-bottom:14px;font-weight:700}
   .sdsdetails{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-  .sdsdetails input{flex:1;min-width:160px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-family:inherit}
+  .sdsdetails select{flex:1;min-width:200px;background:#fff}
+  .sdsdetails input,.sdsdetails select{flex:1;min-width:160px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-family:inherit}
   #sdsOverlay{display:none;position:fixed;inset:0;background:rgba(20,20,30,.55);z-index:100;overflow:auto;padding:28px}
   #sdsOverlay.show{display:block}
   .sds{max-width:840px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)}
@@ -215,7 +216,7 @@ window.WB={CLIENT_ID:'{{CLIENT_ID}}',TENANT_NAME:'{{TENANT_NAME}}',TENANT_SHORT:
      <button class="segbtn" id="segCon" onclick="setResp('contractor')">Contractor</button>
      <span style="flex:1"></span>
    </div>
-   <div class="sdsdetails"><input id="aWorker" placeholder="Worker / PSC name"><input id="aWorkerEmail" type="email" placeholder="Contractor email address" autocomplete="off" spellcheck="false"><input id="aRole" placeholder="Role / assignment"></div>
+   <div class="sdsdetails"><input id="aWorker" placeholder="Worker / PSC name"><input id="aWorkerEmail" type="email" placeholder="Contractor email address" autocomplete="off" spellcheck="false"><select id="aRoleRef" onchange="onRoleRefChange()"><option value="">Select the role from the library...</option></select><input id="aRole" placeholder="Role / assignment"></div>
    <div id="quiz"></div>
    <div style="margin-top:16px;display:flex;gap:10px;align-items:center"><button class="btn" onclick="runAssess()">Run determination →</button><button class="btn sec" onclick="go('assess')">Clear</button><span class="chip" id="qprog"></span></div>
   </div>
@@ -556,6 +557,7 @@ function dts(v){ return v ? String(v).slice(0,10)+' '+String(v).slice(11,16) : n
 function workerRowToView(r){return{
  id:r.id, version:r.version, tenantId:r.client_id,
  ref:r.worker_ref, worker:r.worker_name, role:r.role_title,
+ roleRef:r.role_ref||null, workerEmail:r.worker_email||null,
  engagement:r.engagement||'', rate:(r.day_rate==null?0:Number(r.day_rate)), bucket:r.bucket||'Other',
  answers:r.answers||{}, evidence:r.evidence||{},
  hirerAnswers:r.hirer_answers||{}, contractorAnswers:r.contractor_answers||{},
@@ -779,7 +781,7 @@ function runAssess(){
 async function commitBorder(){
  const a=lastA; if(!a) return;
  const r=await window.__sb.rpc('refer_borderline',{
-  p_worker_name:a.worker, p_role_title:a.role, p_worker_email:a.workerEmail||null,
+  p_worker_name:a.worker, p_role_title:a.role, p_worker_email:a.workerEmail||null, p_role_ref:a.roleRef||null,
   p_answers:a.answers, p_evidence:a.evidence||{},
   p_key_score:a.d.keyScore, p_minor_score:a.d.minorScore, p_total_score:a.d.total,
   p_office_holder:!!a.d.office,
@@ -927,6 +929,7 @@ function buildSdsDoc(o){
  var out=o.outcomeOverride||(d&&d.outcome);
  if(out!=='out'&&out!=='in')throw new Error('a statement can only be built for a decided outcome, not “'+out+'”');
  if(!d||!d.items||!d.items.length)throw new Error('no assessment to record');
+ if(!o.roleRef)throw new Error('no role reference - the statement must name the library role it was made against');
  var items=[];
  d.items.forEach(function(it){
   if(it.q.band==='context')return;
@@ -949,7 +952,7 @@ function buildSdsDoc(o){
   template_version:SDS_TEMPLATE_VERSION,
   ruleset_version:d.rulesetVersion,
   client_name:TENANT.name,
-  worker:o.worker, role_title:o.role,
+  worker:o.worker, role_title:o.role, role_ref:o.roleRef||null,
   outcome:out,
   verdict_label:(out==='out')?'OUTSIDE IR35':'INSIDE IR35',
   office_holder:!!d.office,
@@ -1028,7 +1031,7 @@ function openSDS(ref){
  const html='<div class="sds"><div class="sds-toolbar"><button class="btn sec" onclick="closeSDS()">Close</button><button class="btn" onclick="window.print()">Print / Save PDF</button></div><div class="sds-body">'+
   '<div class="sds-head"><div class="sds-logo">ascend<span>.</span></div><div class="sds-kicker">Status Determination Statement<br>'+esc(sds.ref)+'</div></div>'+
   '<h1>Status Determination Statement</h1><p class="small">Issued under the off-payroll working rules (Chapter 10, Part 2 ITEPA 2003).</p>'+
-  '<div class="meta"><div><b>Worker / PSC</b>'+esc(doc.worker)+'</div><div><b>Role / assignment</b>'+esc(doc.role_title)+'</div><div><b>End-hirer (client)</b>'+esc(doc.client_name)+'</div><div><b>SDS reference</b>'+esc(sds.ref)+'</div><div><b>Determination date</b>'+fmtDate(sds.issuedOn)+'</div><div><b>Ruleset</b>'+esc(doc.ruleset_version)+'</div></div>'+
+  '<div class="meta"><div><b>Worker / PSC</b>'+esc(doc.worker)+'</div><div><b>Role / assignment</b>'+esc(doc.role_title)+'</div><div><b>Role reference</b>'+esc(doc.role_ref||'—')+'</div><div><b>End-hirer (client)</b>'+esc(doc.client_name)+'</div><div><b>SDS reference</b>'+esc(sds.ref)+'</div><div><b>Determination date</b>'+fmtDate(sds.issuedOn)+'</div><div><b>Ruleset</b>'+esc(doc.ruleset_version)+'</div></div>'+
   '<div class="sds-verdict '+vm[0]+'">'+esc(doc.verdict_label||vm[1])+scoreLine+'</div>'+summaryBlock+
   reviewerBlock+
   reasons+ev+
@@ -1110,7 +1113,7 @@ function go(id){
  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
  const sec=document.getElementById(id);if(sec)sec.classList.add('active');
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.v===id));
- if(id==='assess'){wireAssess();var _lock=CURRENT_USER.role==='contractor'?'contractor':(CURRENT_USER.role==='linemanager'?'client':null);applyRespLock(_lock);if(CURRENT_USER.role==='contractor'){const aw=document.getElementById('aWorker');if(aw){aw.value=CURRENT_USER.name;aw.readOnly=true;}const awe=document.getElementById('aWorkerEmail');if(awe){awe.value=CURRENT_USER.email||'';awe.readOnly=true;}const w=DB.worker(CURRENT_USER.workerRef);const ar=document.getElementById('aRole');if(ar&&w){ar.value=w.role;ar.readOnly=true;}}}
+ if(id==='assess'){wireAssess();var _lock=CURRENT_USER.role==='contractor'?'contractor':(CURRENT_USER.role==='linemanager'?'client':null);applyRespLock(_lock);if(CURRENT_USER.role==='contractor'){const aw=document.getElementById('aWorker');if(aw){aw.value=CURRENT_USER.name;aw.readOnly=true;}const awe=document.getElementById('aWorkerEmail');if(awe){awe.value=CURRENT_USER.email||'';awe.readOnly=true;}const arr=document.getElementById('aRoleRef');if(arr)arr.style.display='none';const w=DB.worker(CURRENT_USER.workerRef);const ar=document.getElementById('aRole');if(ar&&w){ar.value=w.role;ar.readOnly=true;}}}
  else if(id==='register'){renderRegister();if(CURRENT_USER.role==='linemanager')injectLMFilter();}
  else {({dash:renderDashboard,jd:initJD,library:renderLibrary,review:renderReview,reviews:renderReviews,audit:renderAudit,analyser:initAnalyser,mine:renderMine,guides:renderGuides}[id]||function(){})();}
  window.scrollTo(0,0);
@@ -1247,7 +1250,7 @@ async function signOff(ref){
   const w=DB.worker(ref);
   if(!w){alert('Worker record not found \u2014 reload and try again.');return;}
   try{
-   _doc=buildSdsDoc({worker:w.worker, role:w.role, d:assess(w.answers,RULESET),
+   _doc=buildSdsDoc({worker:w.worker, role:w.role, roleRef:w.roleRef, d:assess(w.answers,RULESET),
     evidence:w.evidence||{}, summary:sdsSummaryText(w.worker,w.role,w.engagement),
     outcomeOverride:(dec==='Outside')?'out':'in'});
   }catch(e){
@@ -1674,12 +1677,12 @@ function wireAssess(){
   bar=document.createElement('div');bar.id='modeBar';bar.className='seg';bar.style.marginBottom='10px';
   bar.innerHTML='<span class="small" style="font-weight:700">Assessment type:</span>'
    +'<button class="segbtn" id="modeWorker" onclick="setAssessMode(\'worker\')">Per-worker (issues SDS)</button>'
-   +'<button class="segbtn" id="modeRole" onclick="setAssessMode(\'role\')">Role — library (provisional only)</button>';
+   +(canEditRoles()?'<button class="segbtn" id="modeRole" onclick="setAssessMode(\'role\')">Role — library (provisional only)</button>':'');
   const respSeg=document.getElementById('segClient').closest('.seg');
   card.insertBefore(bar,respSeg);
  }
  document.getElementById('modeWorker').classList.toggle('active',!roleM);
- document.getElementById('modeRole').classList.toggle('active',roleM);
+ const _mr=document.getElementById('modeRole'); if(_mr)_mr.classList.toggle('active',roleM);
  const details=document.querySelector('#assess .sdsdetails');
  if(details&&!document.getElementById('aSector')){
   const s1=document.createElement('input');s1.id='aSector';s1.placeholder='Sector';
@@ -1688,6 +1691,8 @@ function wireAssess(){
  }
  const aw=document.getElementById('aWorker');if(aw)aw.style.display=roleM?'none':'';
  const awe=document.getElementById('aWorkerEmail');if(awe)awe.style.display=roleM?'none':'';
+ const arr=document.getElementById('aRoleRef');if(arr){arr.style.display=roleM?'none':'';if(!roleM)fillRoleRefPicker();}
+ if(roleM){const _ar=document.getElementById('aRole');if(_ar)_ar.readOnly=false;}
  const asx=document.getElementById('aSector');if(asx)asx.style.display=roleM?'':'none';
  const aeg=document.getElementById('aEngagement');if(aeg)aeg.style.display=roleM?'':'none';
  const ar=document.getElementById('aRole');if(ar)ar.placeholder=roleM?'Role title':'Role / assignment';
@@ -1715,13 +1720,15 @@ function runAssess(){
  var _rIn=(document.getElementById('aRole').value||'').trim();
  var _eEl=document.getElementById('aWorkerEmail');
  var _eIn=((_eEl&&_eEl.value)||'').trim().toLowerCase();
+ var _refIn=selectedRoleRef();
  var _isCon=!!(CURRENT_USER&&CURRENT_USER.role==='contractor');
  /* WS-01: the contractor is invited by email and no SDS can issue until they
-    have answered, so a worker record with no address is a case that can never
-    complete. Enforced server-side too; this is the legible version. */
- if(!_isCon&&(!_wIn||!_rIn||!_eIn)){
-  alert('Enter the worker / PSC name, their email address and the role / assignment before assessing.\n\nA Status Determination Statement must name the worker it is issued for, and the contractor is invited to complete their part by email - without an address the assessment cannot finish.');
-  var _f=document.getElementById(!_wIn?'aWorker':(!_eIn?'aWorkerEmail':'aRole'));if(_f){_f.focus();_f.scrollIntoView({behavior:'smooth',block:'center'});}
+    have answered, so a worker record with no address can never complete.
+    WS-01b: a role title is free text; the reference is the identity. Checked
+    in screen order so the message points at the first field that is wrong. */
+ if(!_isCon&&(!_wIn||!_eIn)){
+  alert('Enter the worker / PSC name and their email address before assessing.\n\nA Status Determination Statement must name the worker it is issued for, and the contractor is invited to complete their part by email - without an address the assessment cannot finish.');
+  var _f=document.getElementById(!_wIn?'aWorker':'aWorkerEmail');if(_f){_f.focus();_f.scrollIntoView({behavior:'smooth',block:'center'});}
   return;
  }
  if(!_isCon&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(_eIn)){
@@ -1729,10 +1736,15 @@ function runAssess(){
   var _f2=document.getElementById('aWorkerEmail');if(_f2){_f2.focus();if(_f2.select)_f2.select();_f2.scrollIntoView({behavior:'smooth',block:'center'});}
   return;
  }
+ if(!_isCon&&(!_refIn||!_rIn)){
+  alert('Select the role from the library before assessing.\n\nA role title is free text and two people will spell the same role two ways; the role reference is what identifies it. Every determination has to name the library role it was made against.\n\nIf the role is not listed, ask your client administrator to add it to the role library first.');
+  var _fr=document.getElementById('aRoleRef');if(_fr){_fr.focus();_fr.scrollIntoView({behavior:'smooth',block:'center'});}
+  return;
+ }
  const worker=_wIn||'[Worker / PSC]';const role=_rIn||'[Role / assignment]';
  let divergence=null;
  if(PREFILL_SOURCE){const wl=d.office?'Inside':capOutcome(d.outcome);if(wl!==PREFILL_SOURCE.lean)divergence={role:PREFILL_SOURCE.title,roleLean:PREFILL_SOURCE.lean,workerLean:wl};}
- lastA={worker,role,workerEmail:_eIn,answers,evidence,d,divergence,prefillRole:PREFILL_SOURCE?PREFILL_SOURCE.title:null,outstanding:outstandingContractorQs().map(function(q){return q.code;})};
+ lastA={worker,role,workerEmail:_eIn,roleRef:_refIn,answers,evidence,d,divergence,prefillRole:PREFILL_SOURCE?PREFILL_SOURCE.title:null,outstanding:outstandingContractorQs().map(function(q){return q.code;})};
  let h='<div class="result show '+d.outcome+'"><h3>'+d.title+'</h3><div class="score">'+(d.office?'Office-holder override — scoring not determinative':'Key '+sgn(d.keyScore)+' / 30 · Minor '+sgn(d.minorScore)+' / 12 · Combined '+sgn(d.total))+'</div>';
  h+='<p style="font-size:13px">'+d.msg+'</p>';
  if(divergence){h+='<div class="gatebox" style="background:#fff7e6;border-color:#f0c36d;color:#7a5b00">⚠ <b>Diverges from the role library.</b> Role “'+esc(divergence.role)+'” leans <b>'+esc(divergence.roleLean)+'</b>, but this worker assessed <b>'+esc(divergence.workerLean)+'</b>. The divergence is recorded for the varied-group consistency check.</div>';}
@@ -1777,7 +1789,7 @@ function ensureRoles(){
 function useRole(roleId){ensureRoles();const r=DB.s.roles.find(x=>x.roleId===roleId&&x.tenantId===TENANT.id);if(!r)return;
  ASSESS_MODE='worker';go('assess');
  const ar=document.getElementById('aRole');if(ar){ar.value=r.title+' (pre-filled from role library — confirm for this worker)';ar.readOnly=false;}
- const aw=document.getElementById('aWorker');if(aw){aw.value='';aw.readOnly=false;aw.style.display='';}const awe=document.getElementById('aWorkerEmail');if(awe){awe.value='';awe.readOnly=false;awe.style.display='';}
+ const aw=document.getElementById('aWorker');if(aw){aw.value='';aw.readOnly=false;aw.style.display='';}const awe=document.getElementById('aWorkerEmail');if(awe){awe.value='';awe.readOnly=false;awe.style.display='';}const _arrR=document.getElementById('aRoleRef');if(_arrR){_arrR.value='';_arrR.style.display='';}
  applyAnswers(r.answers,r.evidence||{});
  PREFILL_SOURCE={roleId:r.roleId,title:r.title,lean:r.lean};
  document.getElementById('assessResult').innerHTML='<div class="card"><h3><span class="dot"></span>Pre-filled from role library</h3><p class="small">Starting point: <b>'+esc(r.title)+'</b> — provisional lean <b>'+esc(r.lean)+'</b>.<br><br><b>This has not determined anything.</b> Confirm or correct each answer for this worker, and complete the four worker-only questions a role cannot answer — C1, C2 (contract context), M1 (business on own account) and M12 (worked here before) — then run the determination.</p></div>';
@@ -1808,13 +1820,13 @@ async function commitSDS(){
     issue - an SDS with no stored statement is the defect, not a degraded
     success. */
  try{
-  a.__doc=buildSdsDoc({worker:a.worker, role:a.role, d:a.d, evidence:a.evidence||{},
+  a.__doc=buildSdsDoc({worker:a.worker, role:a.role, roleRef:a.roleRef, d:a.d, evidence:a.evidence||{},
    summary:sdsSummaryText(a.worker,a.role,'Entered via live assessment')});
  }catch(e){
   wbFail('determination',{message:'the statement could not be prepared ('+((e&&e.message)||e)+')'});return;
  }
  const r=await window.__sb.rpc('issue_sds',{
-  p_worker_name:a.worker, p_role_title:a.role, p_worker_email:a.workerEmail||null,
+  p_worker_name:a.worker, p_role_title:a.role, p_worker_email:a.workerEmail||null, p_role_ref:a.roleRef||null,
   p_answers:a.answers, p_evidence:a.evidence||{},
   p_document:a.__doc,
   p_outcome:a.d.outcome, p_key_score:a.d.keyScore, p_minor_score:a.d.minorScore,
@@ -1839,7 +1851,16 @@ function ensureRoles(){
  if(!DB.s)DB.load();if(!DB.s.roles)DB.s.roles=[];
 }
 
-function setAssessMode(m){ASSESS_MODE=m;PREFILL_SOURCE=null;EDIT_ROLE_ID=null;wireAssess();}
+function setAssessMode(m){
+ /* A line manager assesses WORKERS. Roles - and therefore role references -
+    are the client administrator's to create, because a reference is a
+    permanent identifier shared with the client's own systems and must never be
+    minted casually mid-assessment. Aaron, 8 Sep. */
+ if(m==='role'&&!canEditRoles()){
+  alert('Roles are added to the library by your client administrator.\n\nAssess the worker against a role from the library instead - if the role you need is not listed, ask your client administrator to add it.');
+  return;
+ }
+ ASSESS_MODE=m;PREFILL_SOURCE=null;EDIT_ROLE_ID=null;wireAssess();}
 
 /* B-07: the second dead commitRole() (D-02) deleted. The live one is the
    async, table-backed definition further down, shipped with S-02. This copy
@@ -1953,6 +1974,54 @@ function ensureRoles(){ if(!DB.s) DB.load(); return ROLE_CACHE || []; }
 function rolesList(){ return ROLE_CACHE || []; }
 function roleByRef(ref){ return (ROLE_CACHE||[]).find(x=>x.roleId===ref) || null; }
 
+/* ---- WS-01b: the role is chosen, not typed -------------------------------
+   The reference is the identity of the role; the title is only its label. The
+   picker is the single place a worker assessment can acquire one, so a
+   determination cannot be raised against a role that is not in the library.  */
+function fillRoleRefPicker(){
+ const sel=document.getElementById('aRoleRef'); if(!sel) return;
+ const keep=sel.value;
+ const list=rolesList();
+ if(!list.length){
+  sel.innerHTML='<option value="">Role library still loading...</option>';
+  if(!ROLE_CACHE) loadRoles().then(function(){ fillRoleRefPicker(); });
+  return;
+ }
+ sel.innerHTML='<option value="">Select the role from the library...</option>'
+  +list.map(function(r){return '<option value="'+esc(r.roleId)+'">'+esc(r.roleId)+' \u2014 '+esc(r.title)+'</option>';}).join('');
+ if(keep&&roleByRef(keep)) sel.value=keep;
+}
+function answeredCount(){ try{ return activeQuestions().filter(function(q){return document.querySelector('input[name="'+q.id+'"]:checked');}).length; }catch(e){ return 0; } }
+
+function onRoleRefChange(quiet){
+ const sel=document.getElementById('aRoleRef'), ar=document.getElementById('aRole');
+ if(!sel||!ar) return;
+ const r=roleByRef(sel.value);
+ if(!r){ ar.value=''; ar.readOnly=false; PREFILL_SOURCE=null; updateProg(); return; }
+ /* Changing the role re-runs the pre-fill, which overwrites answers already
+    given. Silently discarding a line manager's work would be the worse bug, so
+    ask - unless nothing has been answered yet, or it is the same role again. */
+ const already=answeredCount();
+ const same=!!(PREFILL_SOURCE&&PREFILL_SOURCE.roleId===r.roleId);
+ if(!quiet&&already>0&&!same){
+  if(!window.confirm('Switch this assessment to '+r.roleId+' \u2014 '+r.title+'?\n\nThe questionnaire will be re-filled from that role and the '+already+' answer(s) already given here will be replaced.')){
+   sel.value=(PREFILL_SOURCE&&PREFILL_SOURCE.roleId)||'';
+   return;
+  }
+ }
+ /* the title follows the reference, so the two can never disagree on the record */
+ ar.value=r.title; ar.readOnly=true;
+ /* every field pre-filled from the library role - Aaron, 8 Sep. The line
+    manager confirms or corrects; a pre-fill is a starting point, never a lock,
+    or it becomes a blanket determination wearing a worker's name. */
+ applyAnswers(r.answers, r.evidence||{});
+ PREFILL_SOURCE={roleId:r.roleId,title:r.title,lean:r.lean};
+ updateProg();
+ const res=document.getElementById('assessResult');
+ if(res) res.innerHTML='<div class="card"><h3><span class="dot"></span>Pre-filled from '+esc(r.roleId)+'</h3><p class="small">Starting point: <b>'+esc(r.title)+'</b> \u2014 provisional lean <b>'+esc(r.lean)+'</b>.<br><br><b>This has not determined anything.</b> Confirm or correct every answer for this worker, and complete the worker-only questions a role cannot answer \u2014 C1, C2 (contract context), M1 (business on own account) and M12 (worked here before) \u2014 then run the determination.</p></div>';
+}
+function selectedRoleRef(){ const sel=document.getElementById('aRoleRef'); return sel?(sel.value||'').trim():''; }
+
 function roleWriteFailed(what, err){
  alert('Could not '+what+'.\n\n'+(err||'The secure store did not accept the change.')+
        '\n\nNothing has been saved. Copy anything you have just entered, then reload and try again.');
@@ -2034,10 +2103,14 @@ function useRole(roleId){
  if(!ROLE_CACHE){ loadRoles().then(()=>useRole(roleId)); return; }
  const r = roleByRef(roleId); if(!r) return;
  ASSESS_MODE='worker'; go('assess');
- const ar=document.getElementById('aRole'); if(ar){ar.value=r.title+' (pre-filled from role library — confirm for this worker)';ar.readOnly=false;}
- const aw=document.getElementById('aWorker'); if(aw){aw.value='';aw.readOnly=false;aw.style.display='';}const awe=document.getElementById('aWorkerEmail');if(awe){awe.value='';awe.readOnly=false;awe.style.display='';}
- applyAnswers(r.answers, r.evidence||{});
- PREFILL_SOURCE={roleId:r.roleId,title:r.title,lean:r.lean};
+  const aw=document.getElementById('aWorker'); if(aw){aw.value='';aw.readOnly=false;aw.style.display='';}
+ const awe=document.getElementById('aWorkerEmail'); if(awe){awe.value='';awe.readOnly=false;awe.style.display='';}
+ /* the picker is set AFTER the worker fields are cleared - setting it first and
+    clearing afterwards is the bug this replaces. onRoleRefChange does the
+    pre-fill and sets PREFILL_SOURCE, so there is ONE pre-fill path, not two. */
+ fillRoleRefPicker();
+ const arr=document.getElementById('aRoleRef'); if(arr){arr.style.display='';arr.value=r.roleId;}
+ onRoleRefChange(true);
  document.getElementById('assessResult').innerHTML='<div class="card"><h3><span class="dot"></span>Pre-filled from role library</h3><p class="small">Starting point: <b>'+esc(r.title)+'</b> — provisional lean <b>'+esc(r.lean)+'</b>.<br><br><b>This has not determined anything.</b> Confirm or correct each answer for this worker, and complete the four worker-only questions a role cannot answer — C1, C2 (contract context), M1 (business on own account) and M12 (worked here before) — then run the determination.</p></div>';
 }
 
