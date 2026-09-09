@@ -123,7 +123,8 @@ window.WB={CLIENT_ID:'{{CLIENT_ID}}',TENANT_NAME:'{{TENANT_NAME}}',TENANT_SHORT:
   .sds-toolbar{display:flex;gap:8px;justify-content:flex-end;padding:12px 18px;background:#f3f4f6;border-bottom:1px solid var(--line);position:sticky;top:0}
   .sds-body{padding:34px 40px}
   .sds-head{display:flex;align-items:center;gap:14px;border-bottom:3px solid var(--teal);padding-bottom:16px}
-  .sds-logo{font-family:'Mulish',sans-serif;font-weight:800;font-size:24px;color:var(--navy);letter-spacing:.5px}
+  .sds-logo-img{height:40px;width:auto;display:block}
+   .sds-logo{font-family:'Mulish',sans-serif;font-weight:800;font-size:24px;color:var(--navy);letter-spacing:.5px}
   .sds-logo span{color:var(--teal)}
   .sds-kicker{margin-left:auto;text-align:right;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;line-height:1.3}
   .sds h1{font-size:23px;color:var(--navy);margin:18px 0 4px}
@@ -293,7 +294,7 @@ window.WB={CLIENT_ID:'{{CLIENT_ID}}',TENANT_NAME:'{{TENANT_NAME}}',TENANT_SHORT:
 <div id="sdsOverlay"></div>
 <script>
 /* ============================== RULESET v0.3 ==============================
-   30 questions (post-adviser review — Charlie Hemsworth, Bauer & Cottrell, 3 Jul 2026).
+   30 questions (post external-specialist review, 3 Jul 2026).
    Composition: 1 override · 2 context · 15 key (sub 4 / control 7 / mutuality 4) · 12 minor.
    Bands: override / context(unscored) / key(±2) / minor(±1).
    Answers are keyed by OPTION INDEX. opts:[text,score,tone] tone:'good'|''|'risk'.
@@ -305,7 +306,7 @@ window.WB={CLIENT_ID:'{{CLIENT_ID}}',TENANT_NAME:'{{TENANT_NAME}}',TENANT_SHORT:
    WEIGHTS carried over verbatim from v0.2. Thresholds rescaled to the new 30-point
    key ceiling so the Outside bar is no harder than v0.2 (Outside key>=16 & total>=16;
    Inside key<=-16; was 20/20 & -20 against a 36-point ceiling). Provisional —
-   Part 2 (definitive weights + thresholds) pending Bauer & Cottrell calibration (w/c 27 Jul 2026). */
+   Part 2 (definitive weights + thresholds) pending external-specialist calibration (w/c 27 Jul 2026). */
 const RULESET_VERSION='v0.3';
 const RULESET=[
  // -------- OVERRIDE --------
@@ -903,7 +904,7 @@ async function commitBorder(){
   p_engagement:'Entered via live assessment', p_day_rate:0, p_bucket:'Other',
   p_prefill_role_ref:(PREFILL_SOURCE&&PREFILL_SOURCE.roleId)||null,
   p_outstanding:(a.outstanding&&a.outstanding.length)?a.outstanding.join(', '):null,
-  p_assigned_to:'{{INTERNAL_REVIEWER}} (internal senior reviewer)',
+  p_assigned_to:'{{INTERNAL_REVIEWER}}',
   p_ruleset_version:RULESET_VERSION});
  if(r.error){wbFail('referral to expert review',r.error);return;}
  if(!await wbRefresh('referral')){return;} PREFILL_SOURCE=null; renderNav(); go('review');
@@ -1113,7 +1114,11 @@ function openSDS(ref){
  let reasons='';
  Object.keys(groups).forEach(function(g){
   reasons+='<h2>'+esc(g)+'</h2>'+groups[g].map(function(it){
-   return '<div class="sds-q">'+sdsTagHTML(it)+esc((it.code?it.code+' — ':'')+(it.question||''))
+   /* The internal rubric code (C2, M1, K7...) is DELIBERATELY not printed.
+      The SDS is read by the contractor and the hirer, and a code means
+      nothing to either - it is an internal reference. It stays in the
+      stored document for the audit trail; it is only never DISPLAYED. */
+   return '<div class="sds-q">'+sdsTagHTML(it)+esc(it.question||'')
     +': <span class="a">'+esc(it.answer_text)+'</span></div>';
   }).join('');
  });
@@ -1144,7 +1149,7 @@ function openSDS(ref){
   :'';
 
  const html='<div class="sds"><div class="sds-toolbar"><button class="btn sec" onclick="closeSDS()">Close</button><button class="btn" onclick="window.print()">Print / Save PDF</button></div><div class="sds-body">'+
-  '<div class="sds-head"><div class="sds-logo">ascend<span>.</span></div><div class="sds-kicker">Status Determination Statement<br>'+esc(sds.ref)+'</div></div>'+
+  '<div class="sds-head"><img class="sds-logo-img" src="{{CLIENT_LOGO}}" alt="{{TENANT_NAME}}"><div class="sds-kicker">Issued by {{TENANT_NAME}}<br>Status Determination Statement<br>'+esc(sds.ref)+'</div></div>'+
   '<h1>Status Determination Statement</h1><p class="small">Issued under the off-payroll working rules (Chapter 10, Part 2 ITEPA 2003).</p>'+
   '<div class="meta"><div><b>Worker / PSC</b>'+esc(doc.worker)+'</div><div><b>Role / assignment</b>'+esc(doc.role_title)+'</div><div><b>Role reference</b>'+esc(doc.role_ref||'—')+'</div><div><b>End-hirer (client)</b>'+esc(doc.client_name)+'</div><div><b>SDS reference</b>'+esc(sds.ref)+'</div><div><b>Determination date</b>'+fmtDate(sds.issuedOn)+'</div><div><b>Ruleset</b>'+esc(doc.ruleset_version)+'</div></div>'+
   '<div class="sds-verdict '+vm[0]+'">'+esc(doc.verdict_label||vm[1])+scoreLine+'</div>'+summaryBlock+
@@ -1177,9 +1182,9 @@ const NAVLABEL={dash:'Reporting Dashboard',assess:'New Assessment',jd:'JD Analys
 const USERS={
  platform:{role:'platform',name:'Aaron George',title:'Ascend Platform Admin',tenant:'All tenants'},
  clientadmin:{role:'clientadmin',name:'{{TENANT_SHORT}} IR35 Administrator',title:'Client Administrator',tenant:'{{TENANT_SHORT}}'},
- linemanager:{role:'linemanager',name:'Site Investigation Lead',title:'Line Manager',tenant:'{{TENANT_SHORT}}',myRefs:[]},
- internalreviewer:{role:'internalreviewer',name:'{{INTERNAL_REVIEWER}}',title:'Internal Senior Reviewer',tenant:'{{TENANT_SHORT}}'},
- reviewer:{role:'reviewer',name:'{{ADVISER_NAME}}',title:'Expert Reviewer (external)',tenant:'{{TENANT_SHORT}}'},
+ linemanager:{role:'linemanager',name:'',title:'Line Manager',tenant:'{{TENANT_SHORT}}',myRefs:[]},
+ internalreviewer:{role:'internalreviewer',name:'',title:'{{INTERNAL_REVIEWER}}',tenant:'{{TENANT_SHORT}}'},
+ reviewer:{role:'reviewer',name:'',title:'{{ADVISER_NAME}}',tenant:'{{TENANT_SHORT}}'},
  contractor:{role:'contractor',name:'Contractor',title:'Contractor',tenant:'{{TENANT_SHORT}}',workerRef:null}
 };
 function tabsFor(role){return ROLE_TABS[role]||[];}
@@ -1304,7 +1309,7 @@ function renderMine(){
 }
 
 /* ---------- two-stage review (overrides chunk-5 versions) ---------- */
-function stageLabel(st){return st===2?'Stage 2 — external expert':'Stage 1 — internal senior reviewer';}
+function stageLabel(st){return st===2?'Stage 2 — {{ADVISER_NAME}}':'Stage 1 — {{INTERNAL_REVIEWER}}';}
 function isOpen(r){return r.status&&(r.status.indexOf('Awaiting')===0||r.status.indexOf('Escalated')===0||r.status==='In review');}
 function renderReview(){
  const items=DB.reviews();const open=items.filter(isOpen);const done=items.filter(r=>!isOpen(r));
@@ -1326,7 +1331,7 @@ function renderReview(){
     '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="signOff(\''+r.workerRef+'\')">Approve &amp; release SDS →</button>'+
     ((r.stage||1)===1?'<button class="btn sec" onclick="escalate(\''+r.workerRef+'\')">Escalate to external expert →</button>':'')+'</div></div>';
   } else {
-   h+='<div class="callout" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">Awaiting <b>'+(r.stage===2?'the external expert ({{ADVISER_NAME}})':'the internal senior reviewer')+'</b>. '+(canSignOff(role)?'You do not have authority over this stage.':'Only a designated reviewer can sign off a borderline determination.')+'</div>';
+   h+='<div class="callout" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">Awaiting <b>'+(r.stage===2?'the {{ADVISER_NAME}}':'the internal senior reviewer')+'</b>. '+(canSignOff(role)?'You do not have authority over this stage.':'Only a designated reviewer can sign off a borderline determination.')+'</div>';
   }
   h+='</div>';});
  if(done.length){h+='<div class="card"><h3><span class="dot"></span>Closed reviews</h3><table><thead><tr><th>Worker</th><th>Decision</th><th>Resolved at</th><th>By</th></tr></thead><tbody>'+done.map(r=>'<tr><td><b>'+r.workerRef+'</b></td><td>'+(r.decision?pill(r.decision):esc(r.status))+'</td><td class="small">'+esc(r.signedOffAt||'—')+'</td><td class="small">'+esc(r.signedOffBy||r.assignedTo)+'</td></tr>').join('')+'</tbody></table></div>';}
@@ -1336,7 +1341,7 @@ async function escalate(ref){
  const rea=(document.getElementById('rea_'+ref).value||'').trim();
  if(!rea){alert('Please record why you are escalating \u2014 it is part of the reasonable-care evidence.');return;}
  const r=await window.__sb.rpc('escalate_review',{p_worker_ref:ref,p_reason:rea,
-   p_assigned_to:'{{ADVISER_NAME}} (external adviser)'});
+   p_assigned_to:'{{ADVISER_NAME}}'});
  if(r.error){wbFail('escalation',r.error);return;}
  if(!await wbRefresh('escalation')){return;} renderNav(); go('review');
 }
@@ -1768,7 +1773,7 @@ async function processPendingRescores(){
   var r=await window.__sb.rpc('apply_rescore',{
     p_worker_ref:w.ref, p_outcome:d.outcome, p_key_score:d.keyScore,
     p_minor_score:d.minorScore, p_total_score:d.total, p_office_holder:!!d.office,
-    p_assigned_to:'{{INTERNAL_REVIEWER}} (internal senior reviewer)'});
+    p_assigned_to:'{{INTERNAL_REVIEWER}}'});
   if(r.error){wbFail('re-score of '+w.ref,r.error);continue;}
   done++;
  }

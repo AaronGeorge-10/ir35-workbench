@@ -14,8 +14,8 @@
   "TENANT_NAME": "ACME Group plc",
   "TENANT_SHORT": "ACME",
   "SECTOR": "Sector shown on the dashboard, e.g. Renewable energy",
-  "ADVISER_NAME": "Bauer & Cottrell",
-  "INTERNAL_REVIEWER": "ACME Head of Tax",
+  "ADVISER_NAME": "External IR35 Specialist",
+  "INTERNAL_REVIEWER": "IR35 Escalation Reviewer",
   "SUPABASE_URL": "https://<project-ref>.supabase.co",
   "SUPABASE_ANON_KEY": "sb_publishable_...",
   "ANALYZER_URL": "https://ir35-contract-analyzer.onrender.com"

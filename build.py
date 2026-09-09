@@ -23,13 +23,14 @@ Usage:
     python3 build.py --check    # verify the committed output matches a fresh
                                 # build; exit 1 if not. Use this in review.
 """
-import io, json, os, re, shutil, sys, hashlib
+import base64, io, json, os, re, shutil, sys, hashlib
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(ROOT, 'src', 'workbench.html')
 CLIENTS = os.path.join(ROOT, 'clients')
 ASSETS = os.path.join(ROOT, 'assets')
 CNAME = os.path.join(ROOT, 'CNAME')
+LOGOS = os.path.join(ROOT, 'clients', 'logos')
 
 REQUIRED = ['folder', 'CLIENT_ID', 'TENANT_NAME', 'TENANT_SHORT', 'SECTOR',
             'ADVISER_NAME', 'INTERNAL_REVIEWER', 'SUPABASE_URL',
@@ -62,11 +63,32 @@ def ruleset_version():
     return m.group(1)
 
 
+def client_logo(cfg):
+    """The END-HIRER's logo as a data URI.
+
+       Under Chapter 10 the CLIENT makes and issues the determination, so the
+       statement must read as theirs, not as Ascend's. The mark is inlined
+       rather than linked so a printed or saved SDS cannot lose it.
+
+       No silent fallback: a missing logo FAILS the build. A statement that
+       quietly loses its issuer's mark is worse than a build that stops."""
+    path = os.path.join(LOGOS, '%s.png' % cfg['folder'])
+    if not os.path.exists(path):
+        sys.exit('FAIL: no client logo at clients/logos/%s.png - the SDS must '
+                 'carry the end-hirer mark, so the build will not guess one'
+                 % cfg['folder'])
+    raw = io.open(path, 'rb').read()
+    if not raw.startswith(b'\x89PNG'):
+        sys.exit('FAIL: clients/logos/%s.png is not a PNG' % cfg['folder'])
+    return 'data:image/png;base64,' + base64.b64encode(raw).decode('ascii')
+
+
 def tokens(cfg):
     """Every substitutable value: the client config plus derived values."""
     t = dict((k, cfg[k]) for k in REQUIRED if k != 'folder')
     t['CLIENT_URL'] = '%s/%s/' % (site_base(), cfg['folder'])
     t['RULESET_VERSION'] = ruleset_version()
+    t['CLIENT_LOGO'] = client_logo(cfg)
     return t
 
 
