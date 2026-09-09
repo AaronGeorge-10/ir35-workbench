@@ -223,11 +223,19 @@ window.WB={CLIENT_ID:'orsted',TENANT_NAME:'Ørsted',TENANT_SHORT:'Orsted',SECTOR
      <span style="flex:1"></span>
    </div>
    <div class="sdsdetails"><input id="aWorker" placeholder="Worker / PSC name"><input id="aWorkerEmail" type="email" placeholder="Contractor email address" autocomplete="off" spellcheck="false"><select id="aRoleRef" onchange="onRoleRefChange()"><option value="">Select the role from the library...</option></select><input id="aRole" placeholder="Role / assignment"></div>
+   <div class="sdsdetails" id="aChain"><select id="aRoute" onchange="onRouteChange()"><option value="">How is the contractor engaged?...</option><option value="direct">Direct with Orsted</option><option value="agency">Through a recruitment agency</option><option value="umbrella">Through an umbrella company</option><option value="fms">Through the managed service provider</option></select><input id="aAgency" placeholder="Agency / umbrella company name" style="display:none"><input id="aAgencyEmail" type="email" placeholder="Agency contact email address" autocomplete="off" spellcheck="false" style="display:none"><input id="aLineMgr" type="email" placeholder="Line manager email address" autocomplete="off" spellcheck="false"><input id="aStart" type="date" title="Assignment start date"></div>
+   <p class="small" id="aChainHint">The statement is passed to everyone in the payment chain, and the fee-payer is told to apply the tax treatment from the start date &mdash; so these are needed before it can be issued.</p>
    <div id="quiz"></div>
    <div style="margin-top:16px;display:flex;gap:10px;align-items:center"><button class="btn" onclick="runAssess()">Run determination →</button><button class="btn sec" onclick="go('assess')">Clear</button><span class="chip" id="qprog"></span></div>
   </div>
   <div><div id="assessResult"><div class="card"><h3><span class="dot"></span>Result</h3><p class="small">Answer the questions and run the determination. Borderline outcomes never auto-issue an SDS — they route to the expert-review gate.</p></div></div></div>
  </div>
+</section>
+
+<section class="view" id="signoff">
+ <h2>Sign-off queue</h2>
+ <p class="lead">Determinations that are <b>clear</b> &mdash; not borderline &mdash; and ready for the end-hirer to sign. Signing issues the Status Determination Statement and sends it to every party in the chain in one action. Borderline cases are never here; they go to the expert review queue.</p>
+ <div id="signoffBody"></div>
 </section>
 
 <section class="view" id="jd">
@@ -863,6 +871,12 @@ function runAssess(){
 async function commitAwait(){
  const a=lastA; if(!a) return;
  if(!a.workerEmail){ wbFail('the assessment',{message:'no contractor email address - it cannot be saved without one'}); return; }
+ /* R-09. The chain is validated BEFORE the worker is created. The database
+    refuses a statement without it (sds_requires_known_chain), so collecting
+    it later means a determination that cannot be issued. Fail here, where
+    the line manager still has the details in front of them. */
+ const chain=chainFromForm();
+ if(chain.error){ wbFail('the assessment',{message:chain.error}); return; }
  const r=await window.__sb.rpc('create_worker',{
   p_worker_name:a.worker, p_role_title:a.role,
   p_worker_email:a.workerEmail, p_role_ref:a.roleRef||null,
@@ -889,13 +903,22 @@ async function commitAwait(){
  /* WS-04: the invitation goes out on save. The line manager's involvement ends
     at submission, so it cannot depend on them, or anyone else, pressing a
     second button. */
+ /* R-09. Record the chain before the invitation goes out, so the record is
+    complete the moment the contractor is asked to answer. */
+ let chainErr=null;
+ try{
+  const ce=await window.__sb.rpc('set_engagement_details',{p_worker_ref:ref,p_route:chain.route,
+   p_agency_name:chain.agencyName,p_agency_email:chain.agencyEmail,
+   p_line_manager_email:chain.lineMgr,p_start_date:chain.start});
+  if(ce.error) chainErr=ce.error.message||String(ce.error);
+ }catch(e){ chainErr=(e&&e.message)||String(e); }
  const sent=await sendInvite(ref,{quiet:true});
  try{ await wbRefresh('the assessment'); }catch(e){}
  /* Nothing after the write may be allowed to throw before the user is told
     what happened - a silent failure here looks exactly like success. */
  try{ renderNav(); go('register'); }catch(e){}
  if(sent && sent.ok){
-  alert('Saved as '+ref+' and the invitation has been sent to '+sent.sent_to+'.\n\n'+a.worker+' is on the register as Awaiting contractor. No determination has been made and no statement has been issued \u2014 that follows once their answers are in.\n\nThey have been asked to reply by '+sent.due+'.');
+  alert((chainErr?('\u26a0 THE ENGAGEMENT DETAILS WERE NOT SAVED: '+chainErr+'\n\nNo statement can be issued for '+ref+' until they are. Everything else below did happen.\n\n'):'')+'Saved as '+ref+' and the invitation has been sent to '+sent.sent_to+'.\n\n'+a.worker+' is on the register as Awaiting contractor. No determination has been made and no statement has been issued \u2014 that follows once their answers are in.\n\nThey have been asked to reply by '+sent.due+'.');
  }else{
   /* The assessment IS saved. Losing it because the email failed would be the
      worse outcome by far - so this says plainly what did and did not happen. */
@@ -1194,14 +1217,14 @@ function closeSDS(){const ov=document.getElementById('sdsOverlay');ov.classList.
 
 /* ============================== AUTH / RBAC + TWO-STAGE REVIEW (demonstration access) ============================== */
 const ROLE_TABS={
- platform:['dash','assess','jd','library','register','review','reviews','audit','analyser','guides'],
- clientadmin:['dash','assess','jd','library','register','review','reviews','audit','analyser','guides'],
+ platform:['dash','assess','jd','library','register','signoff','review','reviews','audit','analyser','guides'],
+ clientadmin:['dash','assess','jd','library','register','signoff','review','reviews','audit','analyser','guides'],
  linemanager:['dash','assess','jd','library','register','reviews','audit','guides'],
  internalreviewer:['review','register','audit','guides'],
  reviewer:['review','audit','guides'],
  contractor:['mine','assess','guides']
 };
-const NAVLABEL={dash:'Reporting Dashboard',assess:'New Assessment',jd:'JD Analyser',library:'Role Library',register:'Worker Register',review:'Review Queue',reviews:'SDS Reviews',audit:'Audit & Disputes',analyser:'Contract Analyser',mine:'My IR35 status',guides:'Guides'};
+const NAVLABEL={dash:'Reporting Dashboard',assess:'New Assessment',jd:'JD Analyser',library:'Role Library',register:'Worker Register',signoff:'Sign-off Queue',review:'Review Queue',reviews:'SDS Reviews',audit:'Audit & Disputes',analyser:'Contract Analyser',mine:'My IR35 status',guides:'Guides'};
 const USERS={
  platform:{role:'platform',name:'Aaron George',title:'Ascend Platform Admin',tenant:'All tenants'},
  clientadmin:{role:'clientadmin',name:'Orsted IR35 Administrator',title:'Client Administrator',tenant:'Orsted'},
@@ -1246,7 +1269,8 @@ function renderNav(){
  if(!CURRENT_USER){return;}
  const tabs=tabsFor(CURRENT_USER.role);
  const q=DB.reviews().filter(r=>r.status&&r.status.indexOf('Awaiting')===0||r.status==='Escalated — awaiting external').length;
- document.getElementById('nav').innerHTML=tabs.map(id=>'<button data-v="'+id+'" onclick="go(\''+id+'\')">'+navLabel(id)+(id==='review'&&q?' <span class="flag" style="margin-left:4px">'+q+'</span>':'')+'</button>').join('');
+ const sq=signoffPending().length;
+ document.getElementById('nav').innerHTML=tabs.map(id=>'<button data-v="'+id+'" onclick="go(\''+id+'\')">'+navLabel(id)+(id==='review'&&q?' <span class="flag" style="margin-left:4px">'+q+'</span>':'')+(id==='signoff'&&sq?' <span class="flag" style="margin-left:4px">'+sq+'</span>':'')+'</button>').join('');
  updateHeader();
 }
 function go(id){
@@ -1258,7 +1282,7 @@ function go(id){
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.v===id));
  if(id==='assess'){wireAssess();var _lock=CURRENT_USER.role==='contractor'?'contractor':(CURRENT_USER.role==='platform'?null:'client');applyRespLock(_lock);if(CURRENT_USER.role==='contractor'){const aw=document.getElementById('aWorker');if(aw){aw.value=CURRENT_USER.name;aw.readOnly=true;}const awe=document.getElementById('aWorkerEmail');if(awe){awe.value=CURRENT_USER.email||'';awe.readOnly=true;}const arr=document.getElementById('aRoleRef');if(arr)arr.style.display='none';const w=DB.worker(CURRENT_USER.workerRef);const ar=document.getElementById('aRole');if(ar&&w){ar.value=w.role;ar.readOnly=true;}}}
  else if(id==='register'){renderRegister();if(CURRENT_USER.role==='linemanager')injectLMFilter();}
- else {({dash:renderDashboard,jd:initJD,library:renderLibrary,review:renderReview,reviews:renderReviews,audit:renderAudit,analyser:initAnalyser,mine:renderMine,guides:renderGuides}[id]||function(){})();}
+ else {({dash:renderDashboard,jd:initJD,library:renderLibrary,review:renderReview,reviews:renderReviews,audit:renderAudit,analyser:initAnalyser,mine:renderMine,guides:renderGuides,signoff:renderSignoffQueue}[id]||function(){})();}
  window.scrollTo(0,0);
 }
 function initAnalyser(){}
@@ -1409,6 +1433,161 @@ async function signOff(ref){
    page load, so merely opening the tool clobbered whatever anyone else had
    saved. It also hardcoded an escalation of AS-2322 to the external adviser -
    a demo artefact that would have fired against a real review queue. */
+/* ===================== R-09  SIGN-OFF QUEUE (D-3) =====================
+   The clear-case half of sign-off. Borderline never appears here - it goes to
+   the expert review queue, and sign_off_determination() refuses it server-side
+   as well, because visibility is not authority. ==================== */
+
+function onRouteChange(){
+ var r=(document.getElementById('aRoute')||{}).value||'';
+ var show=(r==='agency'||r==='umbrella');
+ ['aAgency','aAgencyEmail'].forEach(function(id){var e=document.getElementById(id);if(e){e.style.display=show?'':'none';if(!show)e.value='';}});
+}
+
+/* Reads the engagement chain off the assessment form and validates it against
+   the same rules the database trigger enforces, so the two cannot disagree. */
+function chainFromForm(){
+ var v=function(id){var e=document.getElementById(id);return e?(e.value||'').trim():'';};
+ var route=v('aRoute'), agency=v('aAgency'), agencyEmail=v('aAgencyEmail'),
+     lineMgr=v('aLineMgr'), start=v('aStart');
+ if(!route) return {error:'choose how the contractor is engaged - the statement has to reach everyone in the payment chain'};
+ if((route==='agency'||route==='umbrella')&&agencyEmail.indexOf('@')<1)
+  return {error:'an agency or umbrella engagement needs the agency contact email address - they are entitled to the statement'};
+ if(lineMgr.indexOf('@')<1)
+  return {error:'a line manager email address is required - they receive the statement and load it into the managed service'};
+ if(!start)
+  return {error:'an assignment start date is required - the fee-payer applies the tax treatment from that date'};
+ return {route:route, agencyName:agency||null, agencyEmail:agencyEmail||null, lineMgr:lineMgr, start:start};
+}
+
+/* Eligible = determined, clear, not yet issued, nothing pending against it. */
+function signoffPending(){
+ try{
+  return (DB.workers()||[]).filter(function(w){
+   return (w.outcome==='out'||w.outcome==='in')
+       && w.sdsState!=='Issued'
+       && !w.rescoreRequired
+       && !DB.reviewFor(w.ref)
+       && !DB.sdsFor(w.ref);
+  });
+ }catch(e){ return []; }
+}
+
+function renderSignoffQueue(){
+ var body=document.getElementById('signoffBody'); if(!body) return;
+ var rows=signoffPending();
+ if(!rows.length){
+  body.innerHTML='<div class="card"><h3><span class="dot"></span>Nothing waiting</h3>'
+   +'<p class="small">No clear determination is waiting to be signed. Borderline cases are in the expert review queue; '
+   +'cases still with the contractor are on the worker register.</p></div>';
+  return;
+ }
+ var h='<div class="card"><h3><span class="dot"></span>'+rows.length+' waiting to be signed</h3>'
+  +'<p class="small">Signing issues the statement and sends it to the contractor, the line manager, the managed '
+  +'service provider and the agency where there is one, in one action. It cannot be undone &mdash; an issued '
+  +'statement is never rewritten.</p>'
+  +'<table><thead><tr><th style="width:28px"><input type="checkbox" id="soAll" onclick="signoffToggleAll(this)"></th>'
+  +'<th>REF</th><th>WORKER / PSC</th><th>ROLE</th><th>DETERMINATION</th><th>SCORE</th><th></th></tr></thead><tbody>';
+ rows.forEach(function(w){
+  var lbl=(w.outcome==='out')?'Outside IR35':'Inside IR35';
+  h+='<tr><td><input type="checkbox" class="soPick" value="'+esc(w.ref)+'"></td>'
+   +'<td><b>'+esc(w.ref)+'</b></td><td>'+esc(w.worker||'')+'</td><td>'+esc(w.role||'')+'</td>'
+   +'<td><span class="flag">'+lbl+'</span></td>'
+   +'<td class="small">key '+(w.key==null?'-':w.key)+' / total '+(w.total==null?'-':w.total)+'</td>'
+   +'<td><button class="btn" onclick="signOffAndSend(\''+esc(w.ref)+'\')">Sign off &amp; send &rarr;</button></td></tr>';
+ });
+ h+='</tbody></table>'
+  +'<div style="margin-top:14px;display:flex;gap:10px;align-items:center">'
+  +'<button class="btn" onclick="signOffSelected()">Sign off &amp; send selected &rarr;</button>'
+  +'<span class="small" id="soProg"></span></div></div>';
+ body.innerHTML=h;
+}
+
+function signoffToggleAll(box){
+ document.querySelectorAll('.soPick').forEach(function(c){c.checked=box.checked;});
+}
+
+/* Builds the statement, signs it, then sends it. The statement is built from
+   the ONE scoring engine over the worker's answers as they stand at the moment
+   of issue - and if that disagrees with the determination on the record, this
+   REFUSES rather than issuing a statement describing a determination nobody
+   made. Rescore first. */
+async function signOffOne(ref){
+ var w=DB.worker(ref);
+ if(!w) return {ok:false, ref:ref, message:'worker record not found - reload and try again'};
+ var d, doc;
+ try{ d=assess(w.answers,RULESET); }
+ catch(e){ return {ok:false, ref:ref, message:'the determination could not be recomputed ('+((e&&e.message)||e)+')'}; }
+ if(d.outcome!==w.outcome)
+  return {ok:false, ref:ref, message:'the answers no longer produce the determination on the record - re-score '+ref+' before signing it'};
+ try{
+  doc=buildSdsDoc({worker:w.worker, role:w.role, roleRef:w.roleRef, d:d,
+   evidence:w.evidence||{}, summary:sdsSummaryText(w.worker,w.role,w.engagement),
+   outcomeOverride:w.outcome});
+ }catch(e){ return {ok:false, ref:ref, message:'the statement could not be prepared ('+((e&&e.message)||e)+')'}; }
+
+ var r=await window.__sb.rpc('sign_off_determination',{p_worker_ref:ref,p_document:doc,p_issued_by:'Orsted'});
+ if(r.error) return {ok:false, ref:ref, message:(r.error.message||String(r.error))};
+
+ /* Signed. From here the statement EXISTS - a delivery failure must never read
+    as a sign-off failure, so it is reported separately. */
+ var s=null; try{ s=(await window.__sb.auth.getSession()).data.session; }catch(e){}
+ if(!s) return {ok:true, ref:ref, sds_ref:r.data&&r.data.sds_ref, sent:0, sendError:'your session expired before it could be sent'};
+ var res, body;
+ try{
+  res=await fetch(WB.SUPABASE_URL+'/functions/v1/issue-sds',{
+   method:'POST',
+   headers:{'Authorization':'Bearer '+s.access_token,'apikey':WB.SUPABASE_ANON_KEY,'Content-Type':'application/json'},
+   body:JSON.stringify({worker_ref:ref})});
+  body=await res.json();
+ }catch(e){
+  return {ok:true, ref:ref, sds_ref:r.data&&r.data.sds_ref, sent:0, sendError:'the delivery service could not be reached ('+((e&&e.message)||e)+')'};
+ }
+ if(!res.ok&&res.status!==207) return {ok:true, ref:ref, sds_ref:r.data&&r.data.sds_ref, sent:0, sendError:(body&&body.error)||('HTTP '+res.status)};
+ return {ok:true, ref:ref, sds_ref:(r.data&&r.data.sds_ref)||(body&&body.sds_ref), sent:(body&&body.sent)||0,
+         failed:(body&&body.failed)||0, sendError:null};
+}
+
+async function signOffAndSend(ref){
+ var w=DB.worker(ref); if(!w) return;
+ if(!confirm('Sign off '+ref+' and send the Status Determination Statement?\n\n'
+  +w.worker+' — '+((w.outcome==='out')?'Outside IR35':'Inside IR35')+'\n\n'
+  +'This issues the statement and sends it to everyone in the chain. It cannot be undone.')) return;
+ var p=document.getElementById('soProg'); if(p)p.textContent='Signing '+ref+'...';
+ var r=await signOffOne(ref);
+ if(!await wbRefresh('the sign-off')){} renderNav(); renderSignoffQueue();
+ if(!r.ok){ wbFail('the sign-off',{message:r.message}); return; }
+ if(r.sendError){
+  alert(r.sds_ref+' was SIGNED AND ISSUED, but it was NOT SENT.\n\n'+r.sendError
+   +'\n\nThe statement exists and is on the record. Nobody in the chain has received it yet.');
+ }else{
+  alert(r.sds_ref+' signed and sent to '+r.sent+' recipient'+(r.sent===1?'':'s')
+   +(r.failed?(', '+r.failed+' FAILED — check the delivery record'):'')+'.');
+ }
+}
+
+async function signOffSelected(){
+ var picked=[].slice.call(document.querySelectorAll('.soPick:checked')).map(function(c){return c.value;});
+ if(!picked.length){ alert('Tick the ones you want to sign off first.'); return; }
+ if(!confirm('Sign off and send '+picked.length+' statement'+(picked.length===1?'':'s')+'?\n\n'
+  +'Each one is issued and sent to everyone in its chain. This cannot be undone.')) return;
+ var p=document.getElementById('soProg'), done=[], failed=[];
+ for(var i=0;i<picked.length;i++){
+  if(p)p.textContent='Signing '+(i+1)+' of '+picked.length+' ('+picked[i]+')...';
+  /* Sequential on purpose: each one allocates a reference and sends mail. */
+  var r=await signOffOne(picked[i]);
+  if(r.ok) done.push(r); else failed.push(r);
+ }
+ if(p)p.textContent='';
+ if(!await wbRefresh('the sign-off')){} renderNav(); renderSignoffQueue();
+ var msg=done.length+' signed and sent.';
+ var notSent=done.filter(function(r){return r.sendError;});
+ if(notSent.length) msg+='\n\n⚠ '+notSent.length+' were signed but NOT sent:\n'+notSent.map(function(r){return '  '+r.ref+' — '+r.sendError;}).join('\n');
+ if(failed.length) msg+='\n\n⚠ '+failed.length+' could not be signed:\n'+failed.map(function(r){return '  '+r.ref+' — '+r.message;}).join('\n');
+ alert(msg);
+}
+/* =================== end R-09 sign-off queue =================== */
+
 let RESP_LOCK=null;
 function setResp(r){if(RESP_LOCK&&r!==RESP_LOCK)return;RESP=(r==='contractor')?'contractor':'client';var c=document.getElementById('segClient'),o=document.getElementById('segCon');if(c)c.classList.toggle('active',RESP==='client');if(o)o.classList.toggle('active',RESP==='contractor');respScopeApply();}
 function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=document.getElementById('segClient'),o=document.getElementById('segCon');if(c)c.classList.toggle('disabled',lock==='contractor');if(o)o.classList.toggle('disabled',lock==='client');}
