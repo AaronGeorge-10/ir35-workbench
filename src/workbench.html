@@ -117,6 +117,12 @@ window.WB={CLIENT_ID:'{{CLIENT_ID}}',TENANT_NAME:'{{TENANT_NAME}}',TENANT_SHORT:
   .sdsdetails{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
   .sdsdetails select{flex:1;min-width:200px;background:#fff}
   .sdsdetails input,.sdsdetails select{flex:1;min-width:160px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-family:inherit}
+  /* R-11b: the start date is one field styled like its neighbours - label inside, placeholder grey */
+  .sdsdetails .datefield{flex:1;min-width:280px;max-width:100%;box-sizing:border-box;display:flex;align-items:center;gap:6px;padding:0 0 0 11px;border:1px solid var(--line);border-radius:8px;background:#fff;overflow:hidden;cursor:text}
+  .sdsdetails .datefield span{font-size:13px;font-weight:400;color:#757575;white-space:nowrap}
+  .sdsdetails .datefield input{flex:1;min-width:130px;border:0;border-radius:0;padding:8px 11px 8px 0;background:transparent;color:var(--ink);text-align:right}
+  .sdsdetails .datefield input:focus{outline:none}
+  .sdsdetails .datefield:focus-within{outline:2px solid var(--teal);outline-offset:-1px}
   #sdsOverlay{display:none;position:fixed;inset:0;background:rgba(20,20,30,.55);z-index:100;overflow:auto;padding:28px}
   #sdsOverlay.show{display:block}
   .sds{max-width:840px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)}
@@ -220,7 +226,7 @@ window.WB={CLIENT_ID:'{{CLIENT_ID}}',TENANT_NAME:'{{TENANT_NAME}}',TENANT_SHORT:
      <span style="flex:1"></span>
    </div>
    <div class="sdsdetails"><input id="aWorker" placeholder="Worker / PSC name"><input id="aWorkerEmail" type="email" placeholder="Contractor email address" autocomplete="off" spellcheck="false"><select id="aRoleRef" onchange="onRoleRefChange()"><option value="">Select the role from the library...</option></select><input id="aRole" placeholder="Role / assignment"></div>
-   <div class="sdsdetails" id="aChain"><select id="aRoute" onchange="onRouteChange()"><option value="">How is the contractor engaged?...</option><option value="direct">Direct with {{TENANT_SHORT}}</option><option value="agency">Through a recruitment agency</option><option value="umbrella">Through an umbrella company</option><option value="fms">Through the managed service provider</option></select><input id="aAgency" placeholder="Agency / umbrella company name" style="display:none"><input id="aAgencyEmail" type="email" placeholder="Agency contact email address" autocomplete="off" spellcheck="false" style="display:none"><input id="aLineMgr" type="email" placeholder="Line manager email address" autocomplete="off" spellcheck="false"><label id="aStartWrap" for="aStart" style="flex:1;min-width:250px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap">Assignment start date<input id="aStart" type="date" title="Assignment start date"></label></div>
+   <div class="sdsdetails" id="aChain"><select id="aRoute" onchange="onRouteChange()"><option value="">How is the contractor engaged?...</option><option value="direct">Direct with {{TENANT_SHORT}}</option><option value="agency">Through a recruitment agency</option><option value="umbrella">Through an umbrella company</option><option value="fms">Through the managed service provider</option></select><input id="aAgency" placeholder="Agency / umbrella company name" style="display:none"><input id="aAgencyEmail" type="email" placeholder="Agency contact email address" autocomplete="off" spellcheck="false" style="display:none"><input id="aLineMgr" type="email" placeholder="Line manager email address" autocomplete="off" spellcheck="false"><label id="aStartWrap" for="aStart" class="datefield"><span>Assignment start date</span><input id="aStart" type="date" title="Assignment start date"></label></div>
    <p class="small" id="aChainHint">The statement is passed to everyone in the payment chain, and the fee-payer is told to apply the tax treatment from the start date &mdash; so these are needed before it can be issued.</p>
    <div id="quiz"></div>
    <div style="margin-top:16px;display:flex;gap:10px;align-items:center"><button class="btn" onclick="runAssess()">Run determination →</button><button class="btn sec" onclick="go('assess')">Clear</button><span class="chip" id="qprog"></span></div>
