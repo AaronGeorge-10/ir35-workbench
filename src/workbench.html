@@ -220,7 +220,7 @@ window.WB={CLIENT_ID:'{{CLIENT_ID}}',TENANT_NAME:'{{TENANT_NAME}}',TENANT_SHORT:
      <span style="flex:1"></span>
    </div>
    <div class="sdsdetails"><input id="aWorker" placeholder="Worker / PSC name"><input id="aWorkerEmail" type="email" placeholder="Contractor email address" autocomplete="off" spellcheck="false"><select id="aRoleRef" onchange="onRoleRefChange()"><option value="">Select the role from the library...</option></select><input id="aRole" placeholder="Role / assignment"></div>
-   <div class="sdsdetails" id="aChain"><select id="aRoute" onchange="onRouteChange()"><option value="">How is the contractor engaged?...</option><option value="direct">Direct with {{TENANT_SHORT}}</option><option value="agency">Through a recruitment agency</option><option value="umbrella">Through an umbrella company</option><option value="fms">Through the managed service provider</option></select><input id="aAgency" placeholder="Agency / umbrella company name" style="display:none"><input id="aAgencyEmail" type="email" placeholder="Agency contact email address" autocomplete="off" spellcheck="false" style="display:none"><input id="aLineMgr" type="email" placeholder="Line manager email address" autocomplete="off" spellcheck="false"><input id="aStart" type="date" title="Assignment start date"></div>
+   <div class="sdsdetails" id="aChain"><select id="aRoute" onchange="onRouteChange()"><option value="">How is the contractor engaged?...</option><option value="direct">Direct with {{TENANT_SHORT}}</option><option value="agency">Through a recruitment agency</option><option value="umbrella">Through an umbrella company</option><option value="fms">Through the managed service provider</option></select><input id="aAgency" placeholder="Agency / umbrella company name" style="display:none"><input id="aAgencyEmail" type="email" placeholder="Agency contact email address" autocomplete="off" spellcheck="false" style="display:none"><input id="aLineMgr" type="email" placeholder="Line manager email address" autocomplete="off" spellcheck="false"><label id="aStartWrap" for="aStart" style="flex:1;min-width:250px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap">Assignment start date<input id="aStart" type="date" title="Assignment start date"></label></div>
    <p class="small" id="aChainHint">The statement is passed to everyone in the payment chain, and the fee-payer is told to apply the tax treatment from the start date &mdash; so these are needed before it can be issued.</p>
    <div id="quiz"></div>
    <div style="margin-top:16px;display:flex;gap:10px;align-items:center"><button class="btn" onclick="runAssess()">Run determination →</button><button class="btn sec" onclick="go('assess')">Clear</button><span class="chip" id="qprog"></span></div>
@@ -1233,7 +1233,7 @@ const USERS={
 function tabsFor(role){return ROLE_TABS[role]||[];}
 function canSignOff(role){return role==='reviewer'||role==='internalreviewer'||role==='platform';}
 function canActStage(role,stage){if(role==='platform')return true;if(stage===1)return role==='internalreviewer';if(stage===2)return role==='reviewer';return false;}
-function defaultTab(role){return {platform:'dash',clientadmin:'dash',linemanager:'dash',internalreviewer:'review',reviewer:'review',contractor:'mine'}[role]||'dash';}
+function defaultTab(role){return {platform:'dash',clientadmin:'dash',linemanager:'library',internalreviewer:'review',reviewer:'review',contractor:'mine'}[role]||'dash';}
 function navLabel(id){if(CURRENT_USER&&CURRENT_USER.role==='contractor'){if(id==='mine')return 'My IR35 status';if(id==='assess')return 'My questionnaire';}return NAVLABEL[id]||id;}
 let CURRENT_USER=null;
 
@@ -1277,7 +1277,7 @@ function go(id){
  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
  const sec=document.getElementById(id);if(sec)sec.classList.add('active');
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.v===id));
- if(id==='assess'){wireAssess();var _lock=CURRENT_USER.role==='contractor'?'contractor':(CURRENT_USER.role==='platform'?null:'client');applyRespLock(_lock);if(CURRENT_USER.role==='contractor'){const aw=document.getElementById('aWorker');if(aw){aw.value=CURRENT_USER.name;aw.readOnly=true;}const awe=document.getElementById('aWorkerEmail');if(awe){awe.value=CURRENT_USER.email||'';awe.readOnly=true;}const arr=document.getElementById('aRoleRef');if(arr)arr.style.display='none';const w=DB.worker(CURRENT_USER.workerRef);const ar=document.getElementById('aRole');if(ar&&w){ar.value=w.role;ar.readOnly=true;}}}
+ if(id==='assess'){wireAssess();applyLineMgrField();var _lock=CURRENT_USER.role==='contractor'?'contractor':(CURRENT_USER.role==='platform'?null:'client');applyRespLock(_lock);if(CURRENT_USER.role==='contractor'){const aw=document.getElementById('aWorker');if(aw){aw.value=CURRENT_USER.name;aw.readOnly=true;}const awe=document.getElementById('aWorkerEmail');if(awe){awe.value=CURRENT_USER.email||'';awe.readOnly=true;}const arr=document.getElementById('aRoleRef');if(arr)arr.style.display='none';const w=DB.worker(CURRENT_USER.workerRef);const ar=document.getElementById('aRole');if(ar&&w){ar.value=w.role;ar.readOnly=true;}}}
  else if(id==='register'){renderRegister();if(CURRENT_USER.role==='linemanager')injectLMFilter();}
  else {({dash:renderDashboard,jd:initJD,library:renderLibrary,review:renderReview,reviews:renderReviews,audit:renderAudit,analyser:initAnalyser,mine:renderMine,guides:renderGuides,signoff:renderSignoffQueue}[id]||function(){})();}
  window.scrollTo(0,0);
@@ -1441,12 +1441,27 @@ function onRouteChange(){
  ['aAgency','aAgencyEmail'].forEach(function(id){var e=document.getElementById(id);if(e){e.style.display=show?'':'none';if(!show)e.value='';}});
 }
 
+/* R-11 (Aaron, 11 Sep): a line manager is signed in with their own account,
+   so the line manager on the statement IS that account - never retyped.
+   Client administrators and the platform seat keep the box, because they
+   may create an assessment on a line manager's behalf. */
+function lineMgrFromAccount(){
+ return (CURRENT_USER&&CURRENT_USER.role==='linemanager'&&CURRENT_USER.email)
+  ? String(CURRENT_USER.email).trim() : '';
+}
+function applyLineMgrField(){
+ var e=document.getElementById('aLineMgr'); if(!e) return;
+ var mine=lineMgrFromAccount();
+ if(mine){ e.value=mine; e.readOnly=true; e.style.display='none'; }
+ else { e.readOnly=false; e.style.display=''; }
+}
+
 /* Reads the engagement chain off the assessment form and validates it against
    the same rules the database trigger enforces, so the two cannot disagree. */
 function chainFromForm(){
  var v=function(id){var e=document.getElementById(id);return e?(e.value||'').trim():'';};
  var route=v('aRoute'), agency=v('aAgency'), agencyEmail=v('aAgencyEmail'),
-     lineMgr=v('aLineMgr'), start=v('aStart');
+     lineMgr=lineMgrFromAccount()||v('aLineMgr'), start=v('aStart');
  if(!route) return {error:'choose how the contractor is engaged - the statement has to reach everyone in the payment chain'};
  if((route==='agency'||route==='umbrella')&&agencyEmail.indexOf('@')<1)
   return {error:'an agency or umbrella engagement needs the agency contact email address - they are entitled to the statement'};
