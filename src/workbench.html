@@ -1630,8 +1630,22 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
   var tries=0;while(!(window.supabase&&window.supabase.createClient)&&tries<60){await new Promise(function(r){setTimeout(r,100);});tries++;}
   if(!(window.supabase&&window.supabase.createClient)){fatal('Could not load the secure-store library. Check your internet connection and reload the page.');return;}
   try{if(!window.__sb)window.__sb=window.supabase.createClient(WB.SUPABASE_URL,WB.SUPABASE_ANON_KEY);}catch(e){fatal('Store configuration error. Please contact Aaron.');return;}
-  try{await DB.loadAsync();}catch(e){console.error('WB load failed',e);
-   if(e&&e.__noTenantRow){fatal('You are signed in, but no secure store exists yet for '+esc(TENANT.name)+'. This is an onboarding step, not a fault with your account — contact Aaron so the tenant store can be provisioned. <b>Nothing has been created or overwritten.</b>');}
+  /* R-15 (15 Sep 2026). The FIRST load straight after MFA verification can go out
+     carrying the pre-verification (aal1) token: mfa.verify() has resolved, but the
+     REST client has not yet picked up the new session. wb_tenant_ok refuses aal1,
+     correctly - and the user got "Secure store unavailable" on a perfectly good
+     account, then found a reload fixed it. Refresh the session and retry ONCE
+     before declaring the store unavailable. A genuine permission failure still
+     lands on the fatal screen, one round trip later. */
+  var _loadErr=null;
+  try{await DB.loadAsync();}
+  catch(e){
+   _loadErr=e;
+   try{ await window.__sb.auth.refreshSession(); await DB.loadAsync(); _loadErr=null; }
+   catch(e2){ _loadErr=e2; }
+  }
+  if(_loadErr){ console.error('WB load failed (after one refresh+retry)',_loadErr);
+   if(_loadErr&&_loadErr.__noTenantRow){fatal('You are signed in, but no secure store exists yet for '+esc(TENANT.name)+'. This is an onboarding step, not a fault with your account — contact Aaron so the tenant store can be provisioned. <b>Nothing has been created or overwritten.</b>');}
    else{fatal('You are signed in, but the '+esc(TENANT.name)+' secure store (London) refused the request. If you have only just been added, your access may not be active yet — contact Aaron. Otherwise check your connection and reload.');}
    return;}
   saveFlagInit();
