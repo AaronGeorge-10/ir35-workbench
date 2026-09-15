@@ -32,9 +32,15 @@ ASSETS = os.path.join(ROOT, 'assets')
 CNAME = os.path.join(ROOT, 'CNAME')
 LOGOS = os.path.join(ROOT, 'clients', 'logos')
 
+# WORKER_TERM* is the noun the client uses for the person being assessed.
+# Orsted say "consultant"; the default everywhere else is "contractor". It is
+# COPY ONLY - the role key, the database columns and the RPC names stay
+# 'contractor' in every build, so the term can differ per client without the
+# schema or the auth model differing at all.
 REQUIRED = ['folder', 'CLIENT_ID', 'TENANT_NAME', 'TENANT_SHORT', 'SECTOR',
             'ADVISER_NAME', 'INTERNAL_REVIEWER', 'SUPABASE_URL',
-            'SUPABASE_ANON_KEY', 'ANALYZER_URL']
+            'SUPABASE_ANON_KEY', 'ANALYZER_URL',
+            'WORKER_TERM', 'WORKER_TERM_CAP', 'WORKER_TERM_PLURAL']
 
 # source file -> path inside the client folder
 GUIDES = [('guide_hirer.html', os.path.join('guides', 'hirer.html')),

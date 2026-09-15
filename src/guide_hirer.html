@@ -59,7 +59,7 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-si
   <ul>
     <li>The Workbench is <b class="t">decision-support, not legal advice</b>. {{TENANT_NAME}}, as the end-hirer, makes and signs off every determination and remains legally responsible for it.</li>
     <li>A role result is a <b class="t">provisional lean only</b> — never an SDS. Only a per-worker assessment can lead to one.</li>
-    <li><b class="t">No SDS is issued until the contractor has answered their own questionnaire</b>, and any borderline case is routed to a qualified reviewer before a statement can issue. Those two gates are what evidence reasonable care to HMRC.</li>
+    <li><b class="t">No SDS is issued until the {{WORKER_TERM}} has answered their own questionnaire</b>, and any borderline case is routed to a qualified reviewer before a statement can issue. Those two gates are what evidence reasonable care to HMRC.</li>
   </ul>
 </div>
 
@@ -84,7 +84,7 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-si
     <li><b class="t">Review Queue</b> and <b class="t">SDS Reviews</b> — borderline cases awaiting sign-off, and the record of issued statements.</li>
     <li><b class="t">Audit &amp; Disputes</b> — the full audit trail and any representations raised.</li>
     <li><b class="t">Contract Analyser</b> — reads a contract and flags IR35 risk by clause. It flags risk; it does not determine status.</li>
-    <li><b class="t">Guides</b> — this guide and the contractor guide.</li>
+    <li><b class="t">Guides</b> — this guide and the {{WORKER_TERM}} guide.</li>
   </ul>
   <p class="small">Line managers see the same set without the Review Queue and Contract Analyser, and their Worker Register filters to their own workers.</p>
 </div>
@@ -93,7 +93,7 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-si
   <h3><span class="n">3</span>Two ways to assess</h3>
   <ul>
     <li><b class="t">Role-based</b> (builds your library) — assess a role as it is typically engaged. Produces a provisional lean and saves to the Role Library. Never issues an SDS. Do this once per role type; it then pre-fills every worker in that role.</li>
-    <li><b class="t">Per-worker</b> (leads to an SDS) — assess a named individual against their actual engagement. This invites the contractor and, once their answers are in, produces a determination.</li>
+    <li><b class="t">Per-worker</b> (leads to an SDS) — assess a named individual against their actual engagement. This invites the {{WORKER_TERM}} and, once their answers are in, produces a determination.</li>
   </ul>
 </div>
 
@@ -113,19 +113,19 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-si
   <h3><span class="n">5</span>Assessing a worker</h3>
   <ol>
     <li>Line managers start in the <b class="t">Role Library</b>, which is the first screen they see after signing in. Find the role and click <b class="t">Pre-fill a worker →</b>; New Assessment opens with that role selected.</li>
-    <li>In <b class="t">New Assessment</b>, enter the <b class="t">worker / PSC name</b>, the <b class="t">contractor's email address</b>, and <b class="t">select the role from the Role Library</b>. All three are required. A role title is free text and two people will spell the same role two ways — the <b class="t">role reference</b> is what identifies it, and every determination has to name the library role it was made against. If the role is not listed, ask your client administrator to add it to the library first.</li>
+    <li>In <b class="t">New Assessment</b>, enter the <b class="t">worker / PSC name</b>, the <b class="t">{{WORKER_TERM}}'s email address</b>, and <b class="t">select the role from the Role Library</b>. All three are required. A role title is free text and two people will spell the same role two ways — the <b class="t">role reference</b> is what identifies it, and every determination has to name the library role it was made against. If the role is not listed, ask your client administrator to add it to the library first.</li>
     <li>The library role's answers pre-fill. Review each one against this worker's <b class="t">actual</b> engagement and change anything that differs — where a worker's answers diverge from the role, the divergence is recorded.</li>
-    <li>Complete the <b class="t">engagement details</b>: how the contractor is engaged (direct, through a recruitment agency, through an umbrella company, or through the managed service provider — with the agency's name and contact email address where there is one) and the <b class="t">assignment start date</b>. The statement goes to everyone in the payment chain, and the fee-payer applies the tax treatment from the start date, so both are required. If you are signed in as a line manager, you are recorded as the line manager automatically. A client administrator creating an assessment on a line manager's behalf enters that line manager's email address.</li>
-    <li>Click <b class="t">Run determination</b>. The worker is saved to the Worker Register as <b class="t">Awaiting contractor</b> and an invitation is emailed to them automatically. <b class="t">At this point no determination has been made and no statement has been issued.</b></li>
-    <li>When the contractor submits their questionnaire, their answers are merged and the determination runs. If it lands <span class="pill out">OUTSIDE</span> or <span class="pill in">INSIDE</span> an SDS is produced. If it lands <span class="pill bor">BORDERLINE</span> it goes to review — stage 1 with an internal senior reviewer, stage 2 with an external specialist — and no SDS issues until it is signed off.</li>
+    <li>Complete the <b class="t">engagement details</b>: how the {{WORKER_TERM}} is engaged (direct, through a recruitment agency, through an umbrella company, or through the managed service provider — with the agency's name and contact email address where there is one) and the <b class="t">assignment start date</b>. The statement goes to everyone in the payment chain, and the fee-payer applies the tax treatment from the start date, so both are required. If you are signed in as a line manager, you are recorded as the line manager automatically. A client administrator creating an assessment on a line manager's behalf enters that line manager's email address.</li>
+    <li>Click <b class="t">Run determination</b>. The worker is saved to the Worker Register as <b class="t">Awaiting {{WORKER_TERM}}</b> and an invitation is emailed to them automatically. <b class="t">At this point no determination has been made and no statement has been issued.</b></li>
+    <li>When the {{WORKER_TERM}} submits their questionnaire, their answers are merged and the determination runs. If it lands <span class="pill out">OUTSIDE</span> or <span class="pill in">INSIDE</span> an SDS is produced. If it lands <span class="pill bor">BORDERLINE</span> it goes to review — stage 1 with an internal senior reviewer, stage 2 with an external specialist — and no SDS issues until it is signed off.</li>
     <li>Each determination is re-assessed <b class="t">every 12 months</b>, or immediately when the role, rate or working practices materially change.</li>
   </ol>
 </div>
 
 <div class="card warn">
   <h3>If an invitation does not arrive</h3>
-  <p>The invitation sends itself when you save the assessment. If the send fails, the confirmation message says so explicitly — the assessment is safe, the worker sits on the register as <b class="t">Awaiting contractor</b>, and the response clock has not started, because nothing reached the contractor.</p>
-  <p><b class="t">Re-sending an invitation is currently an Ascend platform-administrator action.</b> If a contractor says they have not received theirs, or the register shows a failed attempt against their name, contact Ascend and it will be re-sent.</p>
+  <p>The invitation sends itself when you save the assessment. If the send fails, the confirmation message says so explicitly — the assessment is safe, the worker sits on the register as <b class="t">Awaiting {{WORKER_TERM}}</b>, and the response clock has not started, because nothing reached the {{WORKER_TERM}}.</p>
+  <p><b class="t">Re-sending an invitation is currently an Ascend platform-administrator action.</b> If a {{WORKER_TERM}} says they have not received theirs, or the register shows a failed attempt against their name, contact Ascend and it will be re-sent.</p>
 </div>
 
 <div class="card">
@@ -144,7 +144,7 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-si
     <li>Add evidence notes as you go — they are your defence if HMRC ever asks.</li>
     <li>Let borderline cases go to review; don't force a determination.</li>
     <li>Re-assess on any material change to role, rate or working practices.</li>
-    <li>If a contractor disagrees with their determination they may make representations to {{TENANT_NAME}}, who must respond within 45 days.</li>
+    <li>If a {{WORKER_TERM}} disagrees with their determination they may make representations to {{TENANT_NAME}}, who must respond within 45 days.</li>
   </ul>
 </div>
 
