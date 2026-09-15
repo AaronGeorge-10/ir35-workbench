@@ -85,6 +85,13 @@ window.WB={CLIENT_ID:'orsted',TENANT_NAME:'Ørsted',TENANT_SHORT:'Orsted',SECTOR
     font-weight:700;margin-top:16px;padding-top:12px;border-top:2px solid var(--line)}
   .grphead:first-child{margin-top:0;padding-top:0;border-top:none}
   .grphead.minor{color:var(--muted)} .grphead.override{color:var(--red)}
+  .q.qlock .opts label{opacity:.62;cursor:not-allowed}
+  .q.qlock{background:#fbfcfd}
+  .qlockbar{margin-top:8px;font-size:11.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .qlockbar .lk{color:#6b7280}
+  .qlockbar button{font:inherit;font-size:11.5px;padding:3px 9px;border:1px solid var(--line);
+    border-radius:7px;background:#fff;cursor:pointer;color:var(--teal-d);font-weight:600}
+  .qlockbar .corr{color:#8a5a00;font-weight:700}
   .qnote{width:100%;margin-top:9px;min-height:44px;border:1px dashed var(--line);border-radius:8px;
     padding:8px 10px;font-size:12.5px;font-family:inherit;resize:vertical;background:#fbfbfc;color:var(--ink)}
   .qnote:focus{outline:none;border-color:var(--teal);background:#fff}
@@ -328,14 +335,17 @@ window.WB={CLIENT_ID:'orsted',TENANT_NAME:'Ørsted',TENANT_SHORT:'Orsted',SECTOR
    Part 2 (definitive weights + thresholds) pending external-specialist calibration (w/c 27 Jul 2026). */
 const RULESET_VERSION='v0.3';
 const RULESET=[
+ {id:'c1_commenced',code:'C1',grp:'Line manager — complete for this worker',gc:'context',band:'context',
+  t:'Has the contract, including any extensions, already commenced?',
+  opts:[['No — not yet commenced',0,''],['Yes — commenced',0,'']]},
+ {id:'m12_workedbefore',code:'M12',grp:'Line manager — complete for this worker',gc:'minor',band:'minor',reviewFlag:2,
+  t:'Has the consultant worked for the client before in any capacity?',
+  opts:[['No',1,'good'],['Previously an external consultant',0,''],['Previously an Ørsted permanent employee',-1,'risk']]},
  // -------- OVERRIDE --------
  {id:'o1_office',code:'O1',grp:'Statutory override',gc:'override',band:'override',
   t:'Does the consultant hold an office-holder role with the end client, such as a statutory director or board member?',
   opts:[['No',0,'good'],['Yes — statutory director / board member',-99,'risk']]},
  // -------- CONTEXT (captured, not scored) --------
- {id:'c1_commenced',code:'C1',grp:'Engagement context',gc:'context',band:'context',
-  t:'Has the contract, including any extensions, already commenced?',
-  opts:[['No — not yet commenced',0,''],['Yes — commenced',0,'']]},
  {id:'c2_named',code:'C2',grp:'Engagement context',gc:'context',band:'context',resp:'contractor',
   t:'Is the individual who will deliver the services personally named in the contract?',
   opts:[['No',0,''],['Yes',0,'']]},
@@ -426,10 +436,7 @@ const RULESET=[
   opts:[['No',1,'good'],['Informally',0,''],['Yes — line-manages staff',-1,'risk']]},
  {id:'m11_sameskills',code:'M11',grp:'Financial risk and business on own account',gc:'minor',band:'minor',
   t:"Are there permanent employees within the client's business with the same skills as the consultant?",
-  opts:[['No — a distinct specialist capability',1,'good'],['Some overlap',0,''],['Yes — same as existing staff',-1,'risk']]},
- {id:'m12_workedbefore',code:'M12',grp:'Financial risk and business on own account',gc:'minor',band:'minor',reviewFlag:3,
-  t:'Has the consultant worked for the client before in any capacity?',
-  opts:[['No',1,'good'],['Yes — consultant',0,''],['Yes — via umbrella company',0,''],['Yes — employee',-1,'risk'],['Yes — other',0,'']]}
+  opts:[['No — a distinct specialist capability',1,'good'],['Some overlap',0,''],['Yes — same as existing staff',-1,'risk']]}
 ];
 const KEY_MAX=30, MINOR_MAX=12;
 
@@ -1902,6 +1909,50 @@ const ROLE_RULESET=[
 let ASSESS_MODE='worker';
 let lastRole=null;
 let PREFILL_SOURCE=null;
+/* ===== PRE-FILL LOCK (Aaron, 15 Sep 2026) =========================
+   A role pre-fill is READ-ONLY by default so a line manager cannot quietly
+   drift a worker away from the library role. It is a lock, not a wall: every
+   pre-filled answer carries a "Correct for this worker" control that unlocks
+   that one answer and RECORDS that it was corrected. That keeps the per-worker
+   correction (and so the reasonable-care position) and keeps the divergence
+   check meaningful - a locked-shut form could never diverge, which would make
+   every worker's determination a copy of the role's.
+   The locked set is DERIVED from PREFILL_SOURCE, so any path that clears the
+   pre-fill unlocks the form automatically. Only CORRECTED is real state. */
+let CORRECTED=new Set();
+function prefillLocked(){return !!PREFILL_SOURCE && ASSESS_MODE!=='role';}
+function correctedCodes(){return RULESET.filter(function(q){return CORRECTED.has(q.id);}).map(function(q){return q.code;});}
+function correctPrefill(id){
+ CORRECTED.add(id);applyPrefillLock();
+ var el=document.getElementById('q_'+id);
+ if(el){var f=el.querySelector('input');if(f)f.focus();}
+}
+function applyPrefillLock(){
+ var on=prefillLocked();
+ var roleIds={};ROLE_RULESET.forEach(function(q){roleIds[q.id]=1;});
+ RULESET.forEach(function(q){
+  var el=document.getElementById('q_'+q.id);if(!el)return;
+  var isPre=on&&roleIds[q.id];
+  var locked=isPre&&!CORRECTED.has(q.id);
+  el.classList.toggle('qlock',!!locked);
+  el.querySelectorAll('input').forEach(function(i){i.disabled=!!locked;});
+  /* Notes and evidence stay open on EVERY question, locked or not (Aaron,
+     15 Sep). A locked answer is where the line manager most needs to record
+     local context or flag a concern - taking the notes away would make the
+     lock silence them, and evidence on every question is part of the
+     reasonable-care record. */
+  var nt=el.querySelector('.qnote');if(nt)nt.readOnly=false;
+  var bar=el.querySelector('.qlockbar');
+  if(!isPre){if(bar)bar.remove();return;}
+  if(!bar){bar=document.createElement('div');bar.className='qlockbar';
+   el.querySelector('.opts').insertAdjacentElement('afterend',bar);}
+  bar.innerHTML = locked
+   ? '<span class="lk">Pre-filled from the role library. You can still add notes and evidence.</span>'
+     +'<button type="button" onclick="correctPrefill(\''+q.id+'\')">Correct for this worker</button>'
+   : '<span class="corr">Corrected for this worker</span>'
+     +'<span class="lk">This change is recorded against the determination.</span>';
+ });
+}
 function currentRuleset(){return ASSESS_MODE==='role'?ROLE_RULESET:RULESET;}
 
 /* ===== RESPONDENT SCOPING (Aaron, 19 Aug 2026) =====
@@ -2078,7 +2129,7 @@ function wireAssess(){
   const itype=q.multi?'checkbox':'radio';
   q.opts.forEach((o,oi)=>{h+='<label data-tone="'+o[2]+'"><input type="'+itype+'" name="'+q.id+'" value="'+oi+'" onchange="selOpt(this)"><span>'+o[0]+'</span></label>';});
   h+='</div><textarea class="qnote" id="note_'+q.id+'" placeholder="Notes / evidence (optional)"></textarea></div>';});
- c.innerHTML=h;respScopeApply();updateProg();
+ c.innerHTML=h;respScopeApply();applyPrefillLock();updateProg();
  document.getElementById('assessResult').innerHTML= roleM
   ? '<div class="card"><h3><span class="dot"></span>Provisional lean</h3><p class="small">Answer for the role <b>as typically engaged</b>. A role produces a <b>provisional lean only</b> — never an SDS. Saving it adds the role to the library, where it can pre-fill a per-worker assessment.</p></div>'
   : '<div class="card"><h3><span class="dot"></span>Result</h3><p class="small">Answer the questions and run the determination. Borderline outcomes never auto-issue an SDS — they route to the expert-review gate.</p></div>';
@@ -2119,7 +2170,7 @@ function runAssess(){
  const worker=_wIn||'[Worker / PSC]';const role=_rIn||'[Role / assignment]';
  let divergence=null;
  if(PREFILL_SOURCE){const wl=d.office?'Inside':capOutcome(d.outcome);if(wl!==PREFILL_SOURCE.lean)divergence={role:PREFILL_SOURCE.title,roleLean:PREFILL_SOURCE.lean,workerLean:wl};}
- lastA={worker,role,workerEmail:_eIn,roleRef:_refIn,answers,evidence,d,divergence,prefillRole:PREFILL_SOURCE?PREFILL_SOURCE.title:null,outstanding:outstandingContractorQs().map(function(q){return q.code;})};
+ lastA={worker,role,workerEmail:_eIn,roleRef:_refIn,answers,evidence,d,divergence,corrected:correctedCodes(),prefillRole:PREFILL_SOURCE?PREFILL_SOURCE.title:null,outstanding:outstandingContractorQs().map(function(q){return q.code;})};
  let h='<div class="result show '+d.outcome+'"><h3>'+d.title+'</h3><div class="score">'+(d.office?'Office-holder override — scoring not determinative':'Key '+sgn(d.keyScore)+' / 30 · Minor '+sgn(d.minorScore)+' / 12 · Combined '+sgn(d.total))+'</div>';
  h+='<p style="font-size:13px">'+d.msg+'</p>';
  if(divergence){h+='<div class="gatebox" style="background:#fff7e6;border-color:#f0c36d;color:#7a5b00">⚠ <b>Diverges from the role library.</b> Role “'+esc(divergence.role)+'” leans <b>'+esc(divergence.roleLean)+'</b>, but this worker assessed <b>'+esc(divergence.workerLean)+'</b>. The divergence is recorded for the varied-group consistency check.</div>';}
@@ -2217,7 +2268,7 @@ async function commitSDS(){
   p_total_score:a.d.total, p_office_holder:!!a.d.office,
   p_engagement:'Entered via live assessment', p_day_rate:0, p_bucket:'Other',
   p_prefill_role_ref:(PREFILL_SOURCE&&PREFILL_SOURCE.roleId)||null,
-  p_prefill_note:a.prefillRole?('Source role: '+a.prefillRole+(a.divergence?' \u2014 DIVERGED (role '+a.divergence.roleLean+' \u2192 worker '+a.divergence.workerLean+')':' \u2014 consistent')):null,
+  p_prefill_note:a.prefillRole?('Source role: '+a.prefillRole+(a.divergence?' \u2014 DIVERGED (role '+a.divergence.roleLean+' \u2192 worker '+a.divergence.workerLean+')':' \u2014 consistent')+((a.corrected&&a.corrected.length)?' \u2014 corrected for this worker: '+a.corrected.join(', '):' \u2014 no answers corrected')):null,
   p_outstanding:(a.outstanding&&a.outstanding.length)?a.outstanding.join(', '):null,
   p_ruleset_version:RULESET_VERSION});
  if(r.error){wbFail('determination',r.error);return;}
@@ -2381,7 +2432,7 @@ function onRoleRefChange(quiet){
  const sel=document.getElementById('aRoleRef'), ar=document.getElementById('aRole');
  if(!sel||!ar) return;
  const r=roleByRef(sel.value);
- if(!r){ ar.value=''; ar.readOnly=false; PREFILL_SOURCE=null; updateProg(); return; }
+ if(!r){ ar.value=''; ar.readOnly=false; PREFILL_SOURCE=null; CORRECTED.clear(); applyPrefillLock(); updateProg(); return; }
  /* Changing the role re-runs the pre-fill, which overwrites answers already
     given. Silently discarding a line manager's work would be the worse bug, so
     ask - unless nothing has been answered yet, or it is the same role again. */
@@ -2400,6 +2451,7 @@ function onRoleRefChange(quiet){
     or it becomes a blanket determination wearing a worker's name. */
  applyAnswers(r.answers, r.evidence||{});
  PREFILL_SOURCE={roleId:r.roleId,title:r.title,lean:r.lean};
+ CORRECTED.clear();applyPrefillLock();
  updateProg();
  const res=document.getElementById('assessResult');
  if(res) res.innerHTML='<div class="card"><h3><span class="dot"></span>Pre-filled from '+esc(r.roleId)+'</h3><p class="small">Starting point: <b>'+esc(r.title)+'</b> \u2014 provisional lean <b>'+esc(r.lean)+'</b>.<br><br><b>This has not determined anything.</b> Confirm or correct every answer for this worker, and complete the worker-only questions a role cannot answer \u2014 C1, C2 (contract context), M1 (business on own account) and M12 (worked here before) \u2014 then run the determination.</p></div>';
