@@ -21,5 +21,8 @@
   "INTERNAL_REVIEWER": "IR35 Escalation Reviewer",
   "SUPABASE_URL": "https://<project-ref>.supabase.co",
   "SUPABASE_ANON_KEY": "sb_publishable_...",
-  "ANALYZER_URL": "https://ir35-contract-analyzer.onrender.com"
+  "ANALYZER_URL": "https://ir35-contract-analyzer.onrender.com",
+  "FMS_NAME": "The managed service provider",
+  "ASCEND_PAYROLL_EMAIL": "payroll@ascend-people.com",
+  "REVOLUT_PUBLIC_KEY": "PENDING-revolut-public-key"
 }

@@ -12,5 +12,8 @@
   "INTERNAL_REVIEWER": "IR35 Escalation Reviewer",
   "SUPABASE_URL": "https://feevwggvgnhtikotixih.supabase.co",
   "SUPABASE_ANON_KEY": "sb_publishable_t-RArBm4EJMADyNo62ZsXA_GQIwdd0K",
-  "ANALYZER_URL": "https://ir35-contract-analyzer.onrender.com"
+  "ANALYZER_URL": "https://ir35-contract-analyzer.onrender.com",
+  "FMS_NAME": "YunoJuno",
+  "ASCEND_PAYROLL_EMAIL": "payroll@ascend-people.com",
+  "REVOLUT_PUBLIC_KEY": "pk_yHMIoCuKdjIkEOC9WRgWQtngJwkEqlTuOusgtANg7jnn3rwL"
 }

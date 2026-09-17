@@ -40,7 +40,14 @@ LOGOS = os.path.join(ROOT, 'clients', 'logos')
 REQUIRED = ['folder', 'CLIENT_ID', 'TENANT_NAME', 'TENANT_SHORT', 'SECTOR',
             'ADVISER_NAME', 'INTERNAL_REVIEWER', 'SUPABASE_URL',
             'SUPABASE_ANON_KEY', 'ANALYZER_URL',
-            'WORKER_TERM', 'WORKER_TERM_CAP', 'WORKER_TERM_PLURAL']
+            'WORKER_TERM', 'WORKER_TERM_CAP', 'WORKER_TERM_PLURAL',
+            'FMS_NAME', 'ASCEND_PAYROLL_EMAIL', 'REVOLUT_PUBLIC_KEY']
+
+# PAY-04 (17 Sep 2026). FMS_NAME is the client's managed service provider as the
+# line manager knows it (Orsted: YunoJuno). ASCEND_PAYROLL_EMAIL receives the
+# statement when Ascend is the fee-payer. REVOLUT_PUBLIC_KEY is Ascend's Merchant
+# API PUBLIC key - public by design (it sits in every browser); the SECRET key
+# lives only in the Edge Function secrets and must never appear here.
 
 # source file -> path inside the client folder
 GUIDES = [('guide_hirer.html', os.path.join('guides', 'hirer.html')),
@@ -135,6 +142,9 @@ def outputs(cfg, name):
 def load(name):
     path = os.path.join(CLIENTS, name + '.json')
     cfg = json.load(io.open(path, encoding='utf-8'))
+    for k, v in cfg.items():
+        if isinstance(v, str) and re.search(r'\b(sk|wsk)_[A-Za-z0-9]', v):
+            sys.exit('FAIL: %s.json %s looks like a Revolut SECRET key - never put it in a client file' % (name, k))
     missing = [k for k in REQUIRED if k not in cfg or not str(cfg[k]).strip()]
     if missing:
         sys.exit('FAIL: %s.json missing required keys: %s' % (name, missing))

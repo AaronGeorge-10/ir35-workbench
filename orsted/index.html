@@ -236,7 +236,7 @@ window.WB={CLIENT_ID:'orsted',TENANT_NAME:'Ørsted',TENANT_SHORT:'Orsted',SECTOR
      <span style="flex:1"></span>
    </div>
    <div class="sdsdetails"><input id="aWorker" placeholder="Worker / PSC name"><input id="aWorkerEmail" type="email" placeholder="Consultant email address" autocomplete="off" spellcheck="false"><select id="aRoleRef" onchange="onRoleRefChange()"><option value="">Select the role from the library...</option></select><input id="aRole" placeholder="Role / assignment"></div>
-   <div class="sdsdetails" id="aChain"><select id="aRoute" onchange="onRouteChange()"><option value="">How is the consultant engaged?...</option><option value="direct">Direct with Orsted</option><option value="agency">Through a recruitment agency</option><option value="umbrella">Through an umbrella company</option><option value="fms">Through the managed service provider</option></select><input id="aAgency" placeholder="Agency / umbrella company name" style="display:none"><input id="aAgencyEmail" type="email" placeholder="Agency contact email address" autocomplete="off" spellcheck="false" style="display:none"><input id="aLineMgr" type="email" placeholder="Line manager email address" autocomplete="off" spellcheck="false"><label id="aStartWrap" for="aStart" class="datefield"><span>Assignment start date</span><input id="aStart" type="date" title="Assignment start date"></label></div>
+   <div class="sdsdetails" id="aChain"><select id="aRoute" onchange="onRouteChange()"><option value="">How is the consultant engaged?...</option><option value="fms">YunoJuno</option><option value="agency">Through a recruitment agency</option><option value="ascend_payroll">Through Ascend payroll</option></select><input id="aAgency" placeholder="Agency name" style="display:none"><input id="aAgencyEmail" type="email" placeholder="Agency contact email address" autocomplete="off" spellcheck="false" style="display:none"><input id="aLineMgr" type="email" placeholder="Line manager email address" autocomplete="off" spellcheck="false"><label id="aStartWrap" for="aStart" class="datefield"><span>Assignment start date</span><input id="aStart" type="date" title="Assignment start date"></label></div>
    <p class="small" id="aChainHint">The statement is passed to everyone in the payment chain, and the fee-payer is told to apply the tax treatment from the start date &mdash; so these are needed before it can be issued.</p>
    <div id="quiz"></div>
    <div style="margin-top:16px;display:flex;gap:10px;align-items:center"><button class="btn" onclick="runAssess()">Run determination →</button><button class="btn sec" onclick="go('assess')">Clear</button><span class="chip" id="qprog"></span></div>
@@ -245,6 +245,7 @@ window.WB={CLIENT_ID:'orsted',TENANT_NAME:'Ørsted',TENANT_SHORT:'Orsted',SECTOR
  </div>
 </section>
 
+<section class="view" id="pay"></section>
 <section class="view" id="signoff">
  <h2>Sign-off queue</h2>
  <p class="lead">Determinations that are <b>clear</b> &mdash; not borderline &mdash; and ready for the end-hirer to sign. Signing issues the Status Determination Statement and sends it to every party in the chain in one action. Borderline cases are never here; they go to the expert review queue.</p>
@@ -825,9 +826,10 @@ function renderRegister(){
  const _mine=(CURRENT_USER&&CURRENT_USER.role==='linemanager'&&document.getElementById('lmMine')&&document.getElementById('lmMine').checked)?CURRENT_USER.myRefs:null;const rows=ws.filter(w=>(!f||w.status===f)&&(!q||(w.ref+w.worker+w.role+w.engagement).toLowerCase().includes(q))&&(!_mine||_mine.indexOf(w.ref)>=0));
  document.getElementById('regBody').innerHTML=rows.map(w=>{
   const sdsLink=w.sdsState==='Issued'?'<a href="#" style="color:var(--teal);font-weight:600" onclick="openSDS(\''+w.ref+'\');return false;">View SDS</a>':(w.sdsState==='Referred'?'<span class="pill p-border">Referred</span>':'<span class="small">—</span>');
-  return '<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.worker)+'</td><td class="small">'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>£'+w.rate+'</td><td>'+pill(w.status)+'</td><td class="small">'+sdsLink+'</td><td class="small">'+inviteCell(w)+'</td><td class="small">'+(w.nextReview?fmtDate(w.nextReview):'—')+'</td></tr>';
+  return '<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.worker)+'</td><td class="small">'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>£'+w.rate+'</td><td>'+pill(w.status)+'</td><td class="small">'+sdsLink+'</td><td class="small">'+inviteCell(w)+'<div class="small" data-fee="'+esc(w.ref)+'"></div></td><td class="small">'+(w.nextReview?fmtDate(w.nextReview):'—')+'</td></tr>';
  }).join('');
  document.getElementById('regCount').textContent=rows.length+' of '+ws.length+' workers';
+ decorateFees();
 }
 
 /* ============================== ASSESSMENT ============================== */
@@ -1290,6 +1292,9 @@ function go(id){
  if(!CURRENT_USER){return;}
  const tabs=tabsFor(CURRENT_USER.role);
  if(tabs.indexOf(id)<0)id=defaultTab(CURRENT_USER.role);
+ /* PAY-04: a contractor's questionnaire opens only once the fee is settled.
+    The database refuses an unpaid submission as well - this is the courtesy. */
+ if(id==='assess'&&CURRENT_USER.role==='contractor'&&!PAY_UNLOCKED){openPayGate();return;}
  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
  const sec=document.getElementById(id);if(sec)sec.classList.add('active');
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.v===id));
@@ -1357,6 +1362,178 @@ function renderContractAssessment(a){
 
 function renderGuides(){var contractor=CURRENT_USER&&CURRENT_USER.role==='contractor';var G=[];if(!contractor){G.push({t:'Hirer guide',d:'For contract managers and line managers \u2014 signing in, the tabs, assessing roles and workers, what happens when you save, and reasonable care.',f:'guides/hirer.html'});}G.push({t:'Consultant guide',d:'For consultants completing their own questionnaire \u2014 what to have ready, how to answer, and what happens next.',f:'guides/contractor.html'});var h='<h2>Guides</h2><p class="lead">Short guides to using the IR35 Workbench. They open in a new tab, and print cleanly if you want a copy.</p><div class="grid2">';h+=G.map(function(g){return '<div class="card"><h3><span class="dot"></span>'+g.t+'</h3><p class="small">'+g.d+'</p><div style="margin-top:10px"><a class="btn" href="'+g.f+'" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">Open guide &rarr;</a></div></div>';}).join('');h+='</div>';document.getElementById('guidesBody').innerHTML=h;}
 function injectLMFilter(){const tb=document.querySelector('#register .toolbar');if(!tb||document.getElementById('lmMine'))return;const lbl=document.createElement('label');lbl.style.cssText='display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--navy)';lbl.innerHTML='<input type="checkbox" id="lmMine" onchange="renderRegister()"> My workers only';tb.insertBefore(lbl,document.getElementById('regCount'));}
+/* ======================= PAY-04  CONTRACTOR PAYWALL =======================
+   Aaron, 17 Aug / 17 Sep 2026. Revolut Business, Pay by Bank first.
+   The price is decided in ONE place - wb_payment_quote() in the database -
+   and create-payment-order charges exactly that. This screen only shows it.
+   Fulfilment is by Revolut's signed webhook, never by this page: the widget's
+   success callback only starts polling for the entitlement the webhook writes. */
+var REVOLUT_PUBLIC_KEY='pk_yHMIoCuKdjIkEOC9WRgWQtngJwkEqlTuOusgtANg7jnn3rwL';
+var ASCEND_PAYROLL={name:'Ascend People Solutions Ltd',email:'payroll@ascend-people.com'};
+var PAY_UNLOCKED=false;
+var PAY_STATE=null;
+function payMoney(p){return '£'+(Number(p||0)/100).toFixed(2);}
+function payMsg(t,bad){var e=document.getElementById('payMsg');if(e){e.textContent=t||'';e.style.color=bad?'var(--red,#b42318)':'';}}
+function payBusy(on){['payBank','payCard'].forEach(function(id){var b=document.getElementById(id);if(b)b.disabled=!!on;});}
+function loadRevolutSdk(){
+ if(window.__rvLoad) return window.__rvLoad;
+ var BASE='https://merchant.revolut.com/';
+ function add(src){return new Promise(function(res,rej){var s=document.createElement('script');s.src=src;s.async=true;
+  s.onload=function(){res();};s.onerror=function(){rej(new Error('network'));};document.head.appendChild(s);});}
+ window.__rvLoad=add(BASE+'version.js?version='+Date.now())
+  .then(function(){return typeof window.__REV_PAY_VERSION__==='string'?window.__REV_PAY_VERSION__:'';},function(){return '';})
+  .then(function(v){return add(BASE+'embed.js'+(v?'?version='+encodeURIComponent(v):''));})
+  .then(function(){if(typeof window.RevolutCheckout!=='function')throw new Error('The payment service did not start.');return window.RevolutCheckout;});
+ window.__rvLoad.catch(function(){window.__rvLoad=null;});
+ return window.__rvLoad;
+}
+function payErrText(code){
+ return ({not_a_contractor_session:'This page is for the consultant being assessed.',
+  assessment_not_found:'We could not find your assessment. Please contact '+TENANT.name+'.',
+  revolut_order_failed:'The payment service is not available at the moment. Please try again in a few minutes.',
+  revolut_order_incomplete:'The payment service is not available at the moment. Please try again in a few minutes.',
+  order_in_progress_retry:'A payment is already being set up. Please wait a few seconds and try again.',
+  unauthenticated:'Your session has expired. Please sign in again.'})[code]||'';
+}
+async function paymentState(){
+ var r=await window.__sb.rpc('contractor_payment_state');
+ if(r.error) throw r.error;
+ PAY_STATE=r.data||{};
+ if(PAY_STATE.unlocked) PAY_UNLOCKED=true;
+ return PAY_STATE;
+}
+function showPayView(){
+ document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active');});
+ var sec=document.getElementById('pay'); if(sec) sec.classList.add('active');
+ document.querySelectorAll('nav button').forEach(function(b){b.classList.toggle('active',b.dataset.v==='assess');});
+ window.scrollTo(0,0);
+}
+async function openPayGate(){
+ showPayView();
+ var sec=document.getElementById('pay');
+ sec.innerHTML='<div class="card"><h3><span class="dot"></span>Your questionnaire</h3><p class="small">Checking your assessment…</p></div>';
+ var st;
+ try{ st=await paymentState(); }
+ catch(e){
+  sec.innerHTML='<div class="card"><h3><span class="dot"></span>Your questionnaire</h3><div class="gatebox">We could not check your assessment just now ('+esc((e&&e.message)||e)+'). Please reload the page. If this keeps happening, contact '+esc(TENANT.name)+'.</div></div>';
+  return;
+ }
+ if(st.unlocked){ go('assess'); return; }
+ renderPayPanel(st);
+}
+function renderPayPanel(st){
+ var ready=/^pk_/.test(REVOLUT_PUBLIC_KEY);
+ var label=st.tier==='reassessment'?'Reassessment fee':'Assessment fee';
+ var h='<div class="card"><h3><span class="dot"></span>'+label+'</h3>'
+  +'<p>Before you complete your questionnaire, please pay the fee for your IR35 status assessment (<b>'+esc(st.worker_ref||'')+'</b>).</p>'
+  +'<table class="feetab" style="border-collapse:collapse;margin-top:8px;min-width:260px">'
+  +'<tr><td style="padding:4px 18px 4px 0">'+label+'</td><td style="text-align:right">'+payMoney(st.net)+'</td></tr>'
+  +'<tr><td style="padding:4px 18px 4px 0">VAT at 20%</td><td style="text-align:right">'+payMoney(st.vat)+'</td></tr>'
+  +'<tr><td style="padding:6px 18px 4px 0;border-top:1px solid var(--line,#ddd)"><b>Total</b></td><td style="text-align:right;border-top:1px solid var(--line,#ddd)"><b>'+payMoney(st.gross)+'</b></td></tr></table>';
+ if(!ready){
+  h+='<div class="gatebox" style="margin-top:14px">Online payment is not available yet. Please contact '+esc(TENANT.name)+' before completing your questionnaire.</div></div>';
+  document.getElementById('pay').innerHTML=h; return;
+ }
+ h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">'
+  +'<button class="btn" id="payBank" onclick="payByBankNow()">Pay by bank (recommended)</button>'
+  +'<button class="btn sec" id="payCard" onclick="payOtherNow()">Pay by card or Revolut Pay</button></div>'
+  +'<div id="rvEmbed" style="margin-top:14px"></div>'
+  +'<p class="small" id="payMsg" role="status" aria-live="polite"></p>'
+  +'<p class="note">Payments are taken securely by Revolut. Your questionnaire opens as soon as your payment is confirmed, and you will not be charged twice.</p></div>';
+ document.getElementById('pay').innerHTML=h;
+}
+async function createOrderForWidget(){
+ var s=null;
+ try{ s=(await window.__sb.auth.getSession()).data.session; }catch(e){}
+ if(!s) throw new Error(payErrText('unauthenticated'));
+ var res, j={};
+ try{
+  res=await fetch(WB.SUPABASE_URL+'/functions/v1/create-payment-order',{method:'POST',
+   headers:{'Authorization':'Bearer '+s.access_token,'apikey':WB.SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:'{}'});
+  try{ j=await res.json(); }catch(e){}
+ }catch(e){ throw new Error('The payment service could not be reached. Please check your connection and try again.'); }
+ if(j.already_unlocked){ PAY_UNLOCKED=true; setTimeout(function(){go('assess');},0); throw new Error('Your assessment is already unlocked.'); }
+ if(!res.ok||!j.token) throw new Error(payErrText(j.error)||('Payment could not be started (error '+res.status+').'));
+ return {publicId:j.token};
+}
+function onPayError(p){
+ payBusy(false);
+ var m=(p&&p.error&&(p.error.message||p.error))||'';
+ if(/already unlocked/i.test(String(m))) return;
+ payMsg((m?String(m)+' ':'')+'No money has been taken unless your bank has told you otherwise. You can try again.',true);
+}
+function onPayCancel(){ payBusy(false); payMsg('Payment cancelled. You have not been charged.'); }
+async function onPaid(){
+ payBusy(true);
+ payMsg('Payment received. Confirming it with '+TENANT.name+'’s records…');
+ for(var i=0;i<30;i++){
+  await new Promise(function(r){setTimeout(r,i<10?2000:4000);});
+  try{ var st=await paymentState(); if(st.unlocked){ payMsg('Payment confirmed.'); go('assess'); return; } }catch(e){}
+ }
+ payMsg('Your payment has been received but not confirmed to us yet. This usually takes under a minute. Please reload this page shortly — you will not be charged again.');
+}
+async function payByBankNow(){
+ payBusy(true); payMsg('Opening Pay by Bank…');
+ try{
+  var RC=await loadRevolutSdk();
+  var pm=await RC.payments({publicToken:REVOLUT_PUBLIC_KEY});
+  var inst=pm.payByBank({location:'GB',createOrder:createOrderForWidget,onSuccess:onPaid,onError:onPayError,onCancel:onPayCancel});
+  payMsg(''); inst.show();
+ }catch(e){ onPayError({error:(e&&e.message)?e:new Error('The payment service could not be loaded. Please try again.')}); }
+}
+async function payOtherNow(){
+ payBusy(true); payMsg('Loading payment options…');
+ try{
+  var RC=await loadRevolutSdk();
+  if(window.__rvEmb){ try{window.__rvEmb.destroy();}catch(e){} window.__rvEmb=null; }
+  window.__rvEmb=await RC.embeddedCheckout({publicToken:REVOLUT_PUBLIC_KEY,locale:'auto',
+   target:document.getElementById('rvEmbed'),email:(CURRENT_USER&&CURRENT_USER.email)||undefined,
+   createOrder:createOrderForWidget,onSuccess:onPaid,onError:onPayError,onCancel:onPayCancel});
+  payMsg(''); payBusy(false);
+ }catch(e){ onPayError({error:(e&&e.message)?e:new Error('The payment service could not be loaded. Please try again.')}); }
+}
+
+/* Staff side: the fee state on the Worker Register, and the client
+   administrator's "proceed without payment" (brief §4 - the statutory duty is
+   the client's, so a contractor who will not pay cannot block it). */
+function canWaiveFee(){return !!(CURRENT_USER&&(CURRENT_USER.role==='clientadmin'||CURRENT_USER.role==='platform'));}
+async function decorateFees(){
+ try{
+  if(!window.__sb||!CURRENT_USER||CURRENT_USER.role==='contractor')return;
+  var C=TENANT.id;
+  var cl=await window.__sb.from('clients').select('paywall_enabled,paywall_from').eq('client_id',C).maybeSingle();
+  if(cl.error||!cl.data||!cl.data.paywall_enabled)return;
+  var from=cl.data.paywall_from?Date.parse(cl.data.paywall_from):Infinity;
+  var rs=await Promise.all([
+   window.__sb.from('workers').select('worker_ref,created_at,engagement_route').eq('client_id',C),
+   window.__sb.from('entitlements').select('worker_ref,unlocked_by').eq('client_id',C),
+   window.__sb.from('payments').select('worker_ref,state,invoice_number').eq('client_id',C).eq('state','completed')]);
+  if(rs.some(function(r){return r.error;}))return;
+  var ent={},paid={};
+  rs[1].data.forEach(function(e){ent[e.worker_ref]=e.unlocked_by;});
+  rs[2].data.forEach(function(p){paid[p.worker_ref]=p;});
+  rs[0].data.forEach(function(w){
+   var cell=document.querySelector('[data-fee="'+w.worker_ref+'"]'); if(!cell)return;
+   if(Date.parse(w.created_at)<from){cell.innerHTML='';return;}
+   var u=ent[w.worker_ref], t;
+   if(u==='payment') t='Fee paid'+(paid[w.worker_ref]&&paid[w.worker_ref].invoice_number?' · invoice '+esc(paid[w.worker_ref].invoice_number):'');
+   else if(u==='free_tier'||(!u&&w.engagement_route==='ascend_payroll')) t='No fee (Ascend payroll)';
+   else if(u==='orsted_waiver') t='Fee waived';
+   else t='Awaiting fee'+(canWaiveFee()?' · <a href="#" style="color:var(--teal);font-weight:600" onclick="waiveFee(\''+w.worker_ref+'\');return false;">Proceed without payment</a>':'');
+   cell.innerHTML=t;
+  });
+ }catch(e){}
+}
+async function waiveFee(ref){
+ if(!canWaiveFee())return;
+ var reason=window.prompt('Proceed with '+ref+' without the consultant paying the assessment fee?\n\nThe reason is recorded on the audit trail (at least 10 characters).','');
+ if(reason===null)return;
+ var r=await window.__sb.rpc('waive_contractor_payment',{p_worker_ref:ref,p_reason:reason});
+ if(r.error){ alert('Not done: '+(r.error.message||r.error)); return; }
+ alert(ref+' can now complete their questionnaire without paying. This has been recorded on the audit trail.');
+ try{ renderRegister(); }catch(e){}
+}
+
 function renderMine(){
  const u=CURRENT_USER,w=DB.worker(u.workerRef),sds=DB.sdsFor(u.workerRef),rev=DB.reviewFor(u.workerRef);
  let h='<div class="card"><h3><span class="dot"></span>Your engagement</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;font-size:13px"><div><b style="color:var(--muted);font-size:10.5px;text-transform:uppercase;display:block">Worker / PSC</b>'+esc(w.worker)+'</div><div><b style="color:var(--muted);font-size:10.5px;text-transform:uppercase;display:block">Role</b>'+esc(w.role)+'</div><div><b style="color:var(--muted);font-size:10.5px;text-transform:uppercase;display:block">End-hirer</b>'+esc(TENANT.name)+'</div><div><b style="color:var(--muted);font-size:10.5px;text-transform:uppercase;display:block">Engagement</b>'+esc(w.engagement)+'</div></div></div>';
@@ -1453,7 +1630,7 @@ async function signOff(ref){
 
 function onRouteChange(){
  var r=(document.getElementById('aRoute')||{}).value||'';
- var show=(r==='agency'||r==='umbrella');
+ var show=(r==='agency');
  ['aAgency','aAgencyEmail'].forEach(function(id){var e=document.getElementById(id);if(e){e.style.display=show?'':'none';if(!show)e.value='';}});
 }
 
@@ -1479,8 +1656,11 @@ function chainFromForm(){
  var route=v('aRoute'), agency=v('aAgency'), agencyEmail=v('aAgencyEmail'),
      lineMgr=lineMgrFromAccount()||v('aLineMgr'), start=v('aStart');
  if(!route) return {error:'choose how the consultant is engaged - the statement has to reach everyone in the payment chain'};
- if((route==='agency'||route==='umbrella')&&agencyEmail.indexOf('@')<1)
-  return {error:'an agency or umbrella engagement needs the agency contact email address - they are entitled to the statement'};
+ if(route==='agency'&&agencyEmail.indexOf('@')<1)
+  return {error:'an agency engagement needs the agency contact email address - they are entitled to the statement'};
+ /* PAY-04 (Aaron, 17 Sep). Ascend payroll: Ascend is the fee-payer, so Ascend
+    receives the statement. Fixed, never typed by the line manager. */
+ if(route==='ascend_payroll'){ agency=ASCEND_PAYROLL.name; agencyEmail=ASCEND_PAYROLL.email; }
  if(lineMgr.indexOf('@')<1)
   return {error:'a line manager email address is required - they receive the statement and load it into the managed service'};
  if(!start)
