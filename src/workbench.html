@@ -1369,6 +1369,12 @@ var REVOLUT_PUBLIC_KEY='{{REVOLUT_PUBLIC_KEY}}';
 var ASCEND_PAYROLL={name:'Ascend People Solutions Ltd',email:'{{ASCEND_PAYROLL_EMAIL}}'};
 var PAY_UNLOCKED=false;
 var PAY_STATE=null;
+var PAY_BILL={company_name:'',address_lines:[],vat_number:''};
+function readBilling(){
+ var v=function(id){var e=document.getElementById(id);return e?String(e.value||'').replace(/\s+/g,' ').trim():'';};
+ PAY_BILL={company_name:v('billCompany'),address_lines:['billAddr1','billAddr2','billAddr3','billAddr4'].map(v).filter(function(x){return x;}),vat_number:v('billVat')};
+ return {company_name:PAY_BILL.company_name||null,address_lines:PAY_BILL.address_lines,vat_number:PAY_BILL.vat_number||null};
+}
 function payMoney(p){return '£'+(Number(p||0)/100).toFixed(2);}
 function payMsg(t,bad){var e=document.getElementById('payMsg');if(e){e.textContent=t||'';e.style.color=bad?'var(--red,#b42318)':'';}}
 function payBusy(on){['payBank','payCard'].forEach(function(id){var b=document.getElementById(id);if(b)b.disabled=!!on;});}
@@ -1390,7 +1396,13 @@ function payErrText(code){
   revolut_order_failed:'The payment service is not available at the moment. Please try again in a few minutes.',
   revolut_order_incomplete:'The payment service is not available at the moment. Please try again in a few minutes.',
   order_in_progress_retry:'A payment is already being set up. Please wait a few seconds and try again.',
-  unauthenticated:'Your session has expired. Please sign in again.'})[code]||'';
+  unauthenticated:'Your session has expired. Please sign in again.',
+  payment_under_review:'An earlier payment for this assessment is being checked. Please email accounts@ascend-people.com before paying again.',
+  bad_json:'Payment could not be started. Please reload the page and try again.'})[code]
+  ||(/^company_name_too_long/.test(code||'')?'Please shorten the company name to 50 characters or fewer.':'')
+  ||(/^(address_line_too_long|too_many_address_lines|address_lines_invalid)/.test(code||'')?'Please keep each address line to 35 characters or fewer.':'')
+  ||(/^vat_number_too_long/.test(code||'')?'Please check the VAT registration number - it should be 20 characters or fewer.':'')
+  ||'';
 }
 async function paymentState(){
  var r=await window.__sb.rpc('contractor_payment_state');
@@ -1431,6 +1443,19 @@ function renderPayPanel(st){
   h+='<div class="gatebox" style="margin-top:14px">Online payment is not available yet. Please contact '+esc(TENANT.name)+' before completing your questionnaire.</div></div>';
   document.getElementById('pay').innerHTML=h; return;
  }
+ var bl=(PAY_BILL.address_lines||[]).concat(['','','','']);
+ h+='<div class="paybill" style="margin-top:16px;max-width:520px">'
+  +'<h4 style="margin:0 0 4px">Invoice details</h4>'
+  +'<p class="small" style="margin:0 0 8px">Your VAT invoice will be made out to <b>'+esc((CURRENT_USER&&CURRENT_USER.name)||'')+'</b> and emailed to <b>'+esc((CURRENT_USER&&CURRENT_USER.email)||'')+'</b>.</p>'
+  +'<p class="small" style="margin:0 0 8px">Add your company details if you\'d like the invoice in your company\'s name.</p>'
+  +'<div style="display:grid;gap:6px">'
+  +'<input id="billCompany" maxlength="50" autocomplete="organization" placeholder="Company name (optional)" value="'+esc(PAY_BILL.company_name||'')+'">'
+  +'<input id="billAddr1" maxlength="35" autocomplete="address-line1" placeholder="Address line 1 (optional)" value="'+esc(bl[0])+'">'
+  +'<input id="billAddr2" maxlength="35" autocomplete="address-line2" placeholder="Address line 2 (optional)" value="'+esc(bl[1])+'">'
+  +'<input id="billAddr3" maxlength="35" autocomplete="address-level2" placeholder="Town or city (optional)" value="'+esc(bl[2])+'">'
+  +'<input id="billAddr4" maxlength="35" autocomplete="postal-code" placeholder="Postcode (optional)" value="'+esc(bl[3])+'">'
+  +'<input id="billVat" maxlength="20" placeholder="VAT registration number (optional)" value="'+esc(PAY_BILL.vat_number||'')+'">'
+  +'</div></div>';
  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">'
   +'<button class="btn" id="payBank" onclick="payByBankNow()">Pay by bank (recommended)</button>'
   +'<button class="btn sec" id="payCard" onclick="payOtherNow()">Pay by card or Revolut Pay</button></div>'
@@ -1446,7 +1471,7 @@ async function createOrderForWidget(){
  var res, j={};
  try{
   res=await fetch(WB.SUPABASE_URL+'/functions/v1/create-payment-order',{method:'POST',
-   headers:{'Authorization':'Bearer '+s.access_token,'apikey':WB.SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:'{}'});
+   headers:{'Authorization':'Bearer '+s.access_token,'apikey':WB.SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:JSON.stringify({billing:readBilling()})});
   try{ j=await res.json(); }catch(e){}
  }catch(e){ throw new Error('The payment service could not be reached. Please check your connection and try again.'); }
  if(j.already_unlocked){ PAY_UNLOCKED=true; setTimeout(function(){go('assess');},0); throw new Error('Your assessment is already unlocked.'); }
@@ -1504,16 +1529,18 @@ async function decorateFees(){
   var rs=await Promise.all([
    window.__sb.from('workers').select('worker_ref,created_at,engagement_route').eq('client_id',C),
    window.__sb.from('entitlements').select('worker_ref,unlocked_by').eq('client_id',C),
-   window.__sb.from('payments').select('worker_ref,state,invoice_number').eq('client_id',C).eq('state','completed')]);
+   window.__sb.from('payments').select('worker_ref,state,invoice_data').eq('client_id',C).in('state',['completed','review'])]);
   if(rs.some(function(r){return r.error;}))return;
   var ent={},paid={};
   rs[1].data.forEach(function(e){ent[e.worker_ref]=e.unlocked_by;});
-  rs[2].data.forEach(function(p){paid[p.worker_ref]=p;});
+  rs[2].data.forEach(function(p){if(!paid[p.worker_ref]||p.state==='completed')paid[p.worker_ref]=p;});
   rs[0].data.forEach(function(w){
    var cell=document.querySelector('[data-fee="'+w.worker_ref+'"]'); if(!cell)return;
    if(Date.parse(w.created_at)<from){cell.innerHTML='';return;}
    var u=ent[w.worker_ref], t;
-   if(u==='payment') t='Fee paid'+(paid[w.worker_ref]&&paid[w.worker_ref].invoice_number?' · invoice '+esc(paid[w.worker_ref].invoice_number):'');
+   var pp=paid[w.worker_ref], inv=pp&&pp.invoice_data&&pp.invoice_data.invoice_number;
+   if(u==='payment') t='Fee paid'+(inv?' · invoice '+esc(inv):' · invoice pending');
+   else if(!u&&pp&&pp.state==='review') t='Payment under review (Ascend)';
    else if(u==='free_tier'||(!u&&w.engagement_route==='ascend_payroll')) t='No fee (Ascend payroll)';
    else if(u==='orsted_waiver') t='Fee waived';
    else t='Awaiting fee'+(canWaiveFee()?' · <a href="#" style="color:var(--teal);font-weight:600" onclick="waiveFee(\''+w.worker_ref+'\');return false;">Proceed without payment</a>':'');
@@ -1539,7 +1566,38 @@ function renderMine(){
  else if(rev){h+='<p class="small">Your assessment is <b>with a qualified reviewer</b> (borderline) — no determination has been issued yet.</p>';}
  else{h+='<p class="small">No determination issued yet.</p>';}
  h+='</div><div class="card" style="margin-top:14px"><h3><span class="dot"></span>Your questionnaire</h3>'+(hasContractorInput(w)?'<p class="small">Submitted <b>'+esc(w.contractorSubmittedOn)+'</b>. Your answers are merged into the end-hirer\u2019s assessment. You can resubmit if anything has changed \u2014 it is re-merged and re-audited.</p>':'<div class="gatebox">Your answers have not been received yet. No determination can be made until you complete your questionnaire.</div>')+'<p class="small">You do not issue your own SDS; the determination is the end-hirer\u2019s.</p><div style="margin-top:10px"><button class="btn sec" onclick="go(\'assess\')">'+(hasContractorInput(w)?'Review or update my answers':'Open my questionnaire')+' →</button></div></div>';
+ h+='<div id="myInvoices"></div>';
  document.getElementById('mine').innerHTML=h;
+ renderMyInvoices();
+}
+
+/* PAY-05: the contractor's issued VAT invoices. The PDF is the stored one - byte-identical to the
+   email attachment - and is fetched only when asked for. */
+async function renderMyInvoices(){
+ try{
+  if(!window.__sb||!CURRENT_USER||CURRENT_USER.role!=='contractor')return;
+  var r=await window.__sb.from('payments').select('id,invoice_data,invoice_issued_at').not('invoice_issued_at','is',null).order('invoice_issued_at',{ascending:false});
+  var box=document.getElementById('myInvoices'); if(!box||r.error||!r.data||!r.data.length)return;
+  box.innerHTML='<div class="card" style="margin-top:14px"><h3><span class="dot"></span>Your invoices</h3>'
+   +r.data.map(function(p){var d=p.invoice_data||{},t=d.totals||{};
+     return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line,#ddd)">'
+      +'<span class="small"><b>'+esc(d.invoice_number||'')+'</b> &middot; '+esc(d.invoice_date||'')+' &middot; &pound;'+esc(t.gross||'')+' paid</span>'
+      +'<button class="btn sec" onclick="downloadInvoice(\''+esc(p.id)+'\')">Download PDF</button></div>';}).join('')
+   +'<p class="small" style="margin-top:8px">Questions about an invoice: accounts@ascend-people.com</p></div>';
+ }catch(e){}
+}
+async function downloadInvoice(id){
+ try{
+  var r=await window.__sb.from('payments').select('invoice_pdf_b64,invoice_data').eq('id',id).maybeSingle();
+  if(r.error||!r.data||!r.data.invoice_pdf_b64){alert('The invoice could not be loaded. Please try again, or email accounts@ascend-people.com.');return;}
+  var bin=atob(r.data.invoice_pdf_b64),u=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([u],{type:'application/pdf'}));
+  a.download='IR35-Workbench-Invoice-'+String((r.data.invoice_data||{}).invoice_number||'invoice')+'.pdf';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(a.href);},10000);
+ }catch(e){alert('The invoice could not be downloaded ('+((e&&e.message)||e)+').');}
 }
 
 /* ---------- two-stage review (overrides chunk-5 versions) ---------- */
