@@ -1543,6 +1543,7 @@ async function decorateFees(){
    else if(!u&&pp&&pp.state==='review') t='Payment under review (Ascend)';
    else if(u==='free_tier'||(!u&&w.engagement_route==='ascend_payroll')) t='No fee (Ascend payroll)';
    else if(u==='orsted_waiver') t='Fee waived';
+   else if(u==='internal_test') t='Internal test \u00b7 no fee';
    else t='Awaiting fee'+(canWaiveFee()?' · <a href="#" style="color:var(--teal);font-weight:600" onclick="waiveFee(\''+w.worker_ref+'\');return false;">Proceed without payment</a>':'');
    cell.innerHTML=t;
   });

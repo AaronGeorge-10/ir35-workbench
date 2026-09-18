@@ -19,9 +19,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const RV_BASE      = Deno.env.get("REVOLUT_API_BASE") ?? "https://merchant.revolut.com";
-const RV_SECRET    = Deno.env.get("REVOLUT_SECRET_KEY")!;
-const RV_VERSION   = Deno.env.get("REVOLUT_API_VERSION") ?? "2026-04-20";
+// HOTFIX 2026-09-18: trim secrets - a stray newline/space in a secret makes fetch() throw before Revolut is reached.
+const RV_BASE      = (Deno.env.get("REVOLUT_API_BASE") ?? "https://merchant.revolut.com").trim().replace(/\/+$/, "");
+const RV_SECRET    = (Deno.env.get("REVOLUT_SECRET_KEY") ?? "").trim();
+const RV_VERSION   = (Deno.env.get("REVOLUT_API_VERSION") ?? "2026-04-20").trim();
 
 const ORDER_TTL_MS   = 2 * 3600 * 1000;   // matches expire_pending_after PT2H
 const REUSE_MARGIN_MS = 5 * 60 * 1000;    // never hand out a token with < 5 minutes left
@@ -69,6 +70,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST")    return json(405, { error: "method_not_allowed" });
 
+  let reservedId: string | null = null;   // HOTFIX: so a crash after the reserve frees the slot
   try {
     // 1. Identity from the verified JWT only — never trust a worker_ref in the body.
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -113,6 +115,12 @@ Deno.serve(async (req) => {
     const { data: quote, error: qerr } = await svc.rpc("wb_payment_quote", { p_worker_id: worker.id });
     if (qerr || !quote) return json(500, { error: "quote_failed", detail: qerr?.message });
     if (!quote.required) {
+      if (quote.tier === "internal_test") {   // PAY-06: Ascend staff testing the live platform
+        await svc.from("entitlements").upsert(
+          { client_id: tenant, worker_id: worker.id, worker_ref: worker.worker_ref, unlocked_by: "internal_test" },
+          { onConflict: "client_id,worker_id", ignoreDuplicates: true });
+        return json(200, { already_unlocked: true, unlocked_by: "internal_test" });
+      }
       if (quote.tier === "free") {
         await svc.from("entitlements").upsert(
           { client_id: tenant, worker_id: worker.id, worker_ref: worker.worker_ref, unlocked_by: "free_tier" },
@@ -155,6 +163,7 @@ Deno.serve(async (req) => {
       amount_net: net, vat_amount: vat, amount_gross: gross, currency: "GBP", state: "pending",
       ...billRow,
     }).select("id").single();
+    if (reserved?.id) reservedId = reserved.id;
     if (rerr) {
       const { data: w2 } = await svc.from("payments").select("revolut_order_token")
         .eq("client_id", tenant).eq("worker_id", worker.id).eq("state", "pending").maybeSingle();
@@ -163,7 +172,9 @@ Deno.serve(async (req) => {
     }
 
     // 7. Mint the Revolut order. On failure free the slot so the contractor can retry.
-    const rv = await fetch(`${RV_BASE}/api/orders`, {
+    let rv: Response;
+    try {
+    rv = await fetch(`${RV_BASE}/api/orders`, {
       method: "POST",
       headers: { "Authorization": `Bearer ${RV_SECRET}`, "Revolut-Api-Version": RV_VERSION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -175,8 +186,14 @@ Deno.serve(async (req) => {
         metadata: { tenant, worker_ref: worker.worker_ref, payment_id: reserved.id, fee_tier: tier },
       }),
     });
+    } catch (fe) {
+      console.error("create-payment-order: Revolut fetch threw:", String(fe).slice(0, 300));
+      await svc.from("payments").update({ state: "failed" }).eq("id", reserved.id).eq("state", "pending");
+      return json(502, { error: "revolut_unreachable", detail: String(fe).slice(0, 300) });
+    }
     if (!rv.ok) {
       const detail = (await rv.text()).slice(0, 300);
+      console.error("create-payment-order: Revolut refused the order:", rv.status, detail);
       await svc.from("payments").update({ state: "failed" }).eq("id", reserved.id);
       return json(502, { error: "revolut_order_failed", status: rv.status, detail });
     }
@@ -202,6 +219,14 @@ Deno.serve(async (req) => {
     });
     return json(200, { token: order.token, payment_id: reserved.id, tier, gross });
   } catch (e) {
+    console.error("create-payment-order: exception:", String(e).slice(0, 300));
+    if (reservedId) {
+      try {
+        const svc2 = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+        await svc2.from("payments").update({ state: "failed" }).eq("id", reservedId).eq("state", "pending")
+          .is("revolut_order_token", null);
+      } catch { /* best effort */ }
+    }
     return json(500, { error: "exception", detail: String(e).slice(0, 300) });
   }
 });

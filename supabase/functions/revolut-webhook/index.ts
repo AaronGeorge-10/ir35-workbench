@@ -22,9 +22,9 @@ import { INVOICE_CONFIG } from "./invoice_config.ts";
 const SUPABASE_URL   = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY    = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const WEBHOOK_SECRET = Deno.env.get("REVOLUT_WEBHOOK_SECRET") ?? "";
-const RV_BASE        = Deno.env.get("REVOLUT_API_BASE") ?? "https://merchant.revolut.com";
-const RV_SECRET      = Deno.env.get("REVOLUT_SECRET_KEY") ?? "";
-const RV_VERSION     = Deno.env.get("REVOLUT_API_VERSION") ?? "2026-04-20";
+const RV_BASE        = (Deno.env.get("REVOLUT_API_BASE") ?? "https://merchant.revolut.com").trim().replace(/\/+$/, "");
+const RV_SECRET      = (Deno.env.get("REVOLUT_SECRET_KEY") ?? "").trim();
+const RV_VERSION     = (Deno.env.get("REVOLUT_API_VERSION") ?? "2026-08-17").trim();
 const RESEND         = Deno.env.get("RESEND_API_KEY") ?? "";
 
 const FROM        = "IR35 Workbench <assessments@ir35workbench.co.uk>";
@@ -69,10 +69,14 @@ export function methodOf(order: any): { method: string | null; label: string } {
   const pm = done?.payment_method ?? {};
   const t = String(pm.type ?? "").toLowerCase();
   const last4 = /^\d{4}$/.test(String(pm.card_last_four ?? "")) ? String(pm.card_last_four) : "";
-  if (t === "pay_by_bank") return { method: "pay_by_bank", label: "Pay by Bank" };
+  // HOTFIX 2026-09-18: the first live Pay by Bank payment (IRW-000100) came back as an unrecognised type and was
+  // printed "Card". Recognise every open-banking spelling, and NEVER default to "Card" - an unknown type is labelled
+  // neutrally and logged so the mapping can be tightened.
   if (t.startsWith("revolut_pay")) return { method: "revolut_pay", label: "Revolut Pay" };
+  if (/bank|open_?banking|obp|pis/.test(t)) return { method: "pay_by_bank", label: "Pay by Bank" };
   if (t === "card" || t === "apple_pay" || t === "google_pay") return { method: "card", label: last4 ? `Card ending ${last4}` : "Card" };
-  return { method: null, label: "Card" };
+  if (last4) return { method: "card", label: `Card ending ${last4}` };
+  return { method: null, label: "Online (Revolut)" };
 }
 export function invoiceNumber(n: number): string {
   const f = INVOICE_CONFIG.invoice_number_format;
@@ -98,7 +102,7 @@ export function buildInvoiceData(p: any, w: any, clientName: string) {
     invoice_date: date,
     tax_point_date: null,
     payment_date: date,
-    payment_method: p.payment_method_label || "Card",
+    payment_method: p.payment_method_label || "Online (Revolut)",
     payment_reference: p.revolut_order_id,
     contractor: {
       full_name: p.bill_full_name || w.worker_name,
@@ -226,7 +230,7 @@ export async function handle(req: Request): Promise<Response> {
 
   // Revolut's own record of the order - never the webhook body - decides what was paid.
   let amount: number | null = null, currency: string | null = null, state: string | null = null;
-  let method: { method: string | null; label: string } = { method: null, label: "Card" };
+  let method: { method: string | null; label: string } = { method: null, label: "Online (Revolut)" };
   if (event === "ORDER_COMPLETED") {
     try {
       const r = await fetch(`${RV_BASE}/api/orders/${encodeURIComponent(orderId)}`, {
@@ -239,6 +243,9 @@ export async function handle(req: Request): Promise<Response> {
       currency = typeof order?.currency === "string" ? order.currency : null;
       state = typeof order?.state === "string" ? order.state : null;
       method = methodOf(order);
+      // HOTFIX 2026-09-18: record what Revolut actually reported, so the method mapping is based on evidence.
+      const seen = (Array.isArray(order?.payments) ? order.payments : []).map((p: any) => `${p?.state}:${p?.payment_method?.type}`);
+      console.log("revolut-webhook: order", orderId, "payments", JSON.stringify(seen).slice(0, 300), "->", method.label);
     } catch (e) { return new Response("order_lookup_error: " + String(e).slice(0, 200), { status: 502 }); }
   }
 
