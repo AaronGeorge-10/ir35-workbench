@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>IR35 Workbench — Hirer guide — {{TENANT_NAME}}</title>
+<title>IR35 Workbench — Client administrator guide — {{TENANT_NAME}}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;550;600;650;700;800&display=swap" rel="stylesheet">
 <style>
@@ -46,18 +46,18 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-si
 <body>
 <header><div class="wrap">
   <h1>IR35 Workbench</h1>
-  <div class="sub">Hirer guide · {{TENANT_NAME}} · ruleset {{RULESET_VERSION}}</div>
+  <div class="sub">Client administrator guide · {{TENANT_NAME}} · ruleset {{RULESET_VERSION}}</div>
 </div></header>
 
 <div class="wrap">
 
 <h2>Determining off-payroll (IR35) status</h2>
-<p class="lead">A short guide for {{TENANT_NAME}} contract managers and line managers using the Ascend IR35 Workbench to assess roles and workers and produce Status Determination Statements (SDS).</p>
+<p class="lead">A short guide for {{TENANT_NAME}} client administrators using the Ascend IR35 Workbench to build the role library, assess workers, sign off determinations and issue Status Determination Statements (SDS). Line managers have their own shorter guide.</p>
 
 <div class="card key">
   <h3>Three things to keep in mind</h3>
   <ul>
-    <li>The Workbench is <b class="t">decision-support, not legal advice</b>. {{TENANT_NAME}}, as the end-hirer, makes and signs off every determination and remains legally responsible for it.</li>
+    <li>The Workbench is <b class="t">decision-support</b>. {{TENANT_NAME}}, as the end-hirer, makes and signs off every determination and remains legally responsible for it.</li>
     <li>A role result is a <b class="t">provisional lean only</b> — never an SDS. Only a per-worker assessment can lead to one.</li>
     <li><b class="t">No SDS is issued until the {{WORKER_TERM}} has answered their own questionnaire</b>, and any borderline case is routed to a qualified reviewer before a statement can issue. Those two gates are what evidence reasonable care to HMRC.</li>
   </ul>
@@ -77,7 +77,6 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-si
     <li>Only addresses {{TENANT_NAME}} has set up will work. Anything else is told <i>&ldquo;We do not recognise that email address&rdquo;</i>. There is no self sign-up.</li>
     <li>Ignore <b class="t">Sign in with Google</b> and <b class="t">Sign in with Apple</b> — those are for {{WORKER_TERM_PLURAL}}, not for {{TENANT_NAME}} staff.</li>
     <li>Accounts are individual and named. Every action is recorded against yours, so please don't share a code or sign in on someone else's behalf.</li>
-    <li>Your role — <b class="t">Client Administrator</b> or <b class="t">Line Manager</b> — comes from your account. You do not choose it when you sign in.</li>
   </ul>
 </div>
 
@@ -89,12 +88,12 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-si
     <li><b class="t">JD Analyser</b> — paste a job description for a quick provisional lean. Triage only; never a determination.</li>
     <li><b class="t">Role Library</b> — pre-assessed roles that pre-fill a worker's assessment and carry the prior reasoning.</li>
     <li><b class="t">Worker Register</b> — every assessed worker, their outcome, SDS state, invitation state and next review date.</li>
+    <li><b class="t">Sign-off Queue</b> — clear-cut determinations waiting for you to sign and issue. This is where an SDS is produced.</li>
     <li><b class="t">Review Queue</b> and <b class="t">SDS Reviews</b> — borderline cases awaiting sign-off, and the record of issued statements.</li>
     <li><b class="t">Audit &amp; Disputes</b> — the full audit trail and any representations raised.</li>
     <li><b class="t">Contract Analyser</b> — reads a contract and flags IR35 risk by clause. It flags risk; it does not determine status.</li>
-    <li><b class="t">Guides</b> — this guide and the {{WORKER_TERM}} guide.</li>
+    <li><b class="t">Guides</b> — this guide, the line manager guide and the {{WORKER_TERM}} guide.</li>
   </ul>
-  <p class="small">Line managers see the same set without the Review Queue and Contract Analyser, and their Worker Register filters to their own workers.</p>
 </div>
 
 <div class="card">
