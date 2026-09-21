@@ -1098,6 +1098,23 @@ function sdsTagParts(it){
  return it.val>0?['SUPPORTS OUTSIDE','pos']:(it.val<0?['ATTENTION','att']:['NEUTRAL','neu']);
 }
 
+/* R-22. The signature of the person signing, read from the token by
+   wb_my_signature() - it takes no arguments, so a caller cannot ask for
+   somebody else's signature. Returns null when none is held, which the
+   callers treat as "cannot sign", never as "sign without one". */
+async function mySignaturePng(){
+ try{ var r=await window.__sb.rpc('wb_my_signature');
+      return (r&&!r.error&&r.data)?r.data:null; }
+ catch(e){ return null; }
+}
+/* sds.signed_off_by stores "<name> - <title>" (ir35_r08, ir35_b08). The
+   sign-off block is name, signature and date - NO job title (Aaron,
+   9 Sep, settled after three passes). Strip it for display only; the
+   stored field keeps the fuller string for the audit trail. */
+function signatoryName(s){
+ s=String(s||''); var i=s.indexOf(' - ');
+ return (i>0? s.slice(0,i) : s).trim();
+}
 function buildSdsDoc(o){
  var d=o.d;
  var out=o.outcomeOverride||(d&&d.outcome);
@@ -1133,6 +1150,8 @@ function buildSdsDoc(o){
   key_score:d.keyScore, minor_score:d.minorScore, total_score:d.total,
   role_summary:o.summary||'',
   items:items, evidence:ev,
+  /* inside the sealed document on purpose - see the note on mySignaturePng */
+  signature_png:o.signaturePng||null,
   statements:sdsStatements(TENANT.name)
  };
 }
@@ -1221,8 +1240,10 @@ function openSDS(ref){
    platform role label (Aaron, 9 Sep). Only Ørsted may sign: the
    external reviewer never signs, because they are not the client. */
   '<div class="sds-sign"><div><b style="font-size:10.5px;color:var(--muted)">DETERMINED BY (END-HIRER)</b>'+
-   (sds.signatureImage?'<img class="sds-sig" src="'+esc(sds.signatureImage)+'" alt="Signature">':'<div class="sds-sig-gap"></div>')+
-   '<div class="line">'+esc(sds.signedOffBy||sds.issuedBy||'\u2014')+'</div></div>'+
+   /* R-22: from the SEALED document, never a live lookup - the statement
+      must render exactly as it was signed. */
+   (doc.signature_png?'<img class="sds-sig" src="data:image/png;base64,'+esc(doc.signature_png)+'" alt="Signature">':'<div class="sds-sig-gap"></div>')+
+   '<div class="line">'+esc(signatoryName(sds.signedOffBy||sds.issuedBy)||'\u2014')+'</div></div>'+
    '<div><b style="font-size:10.5px;color:var(--muted)">DATE</b><div class="sds-sig-gap"></div>'+
    '<div class="line">'+fmtDate(sds.signedOffAt||sds.issuedOn)+'</div></div></div>'+
   '<div class="sds-foot">'+esc(st.footer||'')+'</div>'+seal+
@@ -1791,10 +1812,12 @@ async function signOffOne(ref){
  catch(e){ return {ok:false, ref:ref, message:'the determination could not be recomputed ('+((e&&e.message)||e)+')'}; }
  if(d.outcome!==w.outcome)
   return {ok:false, ref:ref, message:'the answers no longer produce the determination on the record - re-score '+ref+' before signing it'};
+ var _sig=await mySignaturePng();
+ if(!_sig) return {ok:false, ref:ref, message:'no signature is held for your account, so '+ref+' cannot be signed. Ask Ascend to add your signature, then sign off again.'};
  try{
   doc=buildSdsDoc({worker:w.worker, role:w.role, roleRef:w.roleRef, d:d,
    evidence:w.evidence||{}, summary:sdsSummaryText(w.worker,w.role,w.engagement),
-   outcomeOverride:w.outcome});
+   outcomeOverride:w.outcome, signaturePng:_sig});
  }catch(e){ return {ok:false, ref:ref, message:'the statement could not be prepared ('+((e&&e.message)||e)+')'}; }
 
  var r=await window.__sb.rpc('sign_off_determination',{p_worker_ref:ref,p_document:doc,p_issued_by:'Orsted'});
@@ -2586,9 +2609,11 @@ async function commitSDS(){
     the statement land in one transaction. If it cannot be built we do not
     issue - an SDS with no stored statement is the defect, not a degraded
     success. */
+ var _sig=await mySignaturePng();
+ if(!_sig){ wbFail('determination',{message:'no signature is held for your account, so this statement cannot be signed. Ask Ascend to add your signature before issuing.'}); return; }
  try{
   a.__doc=buildSdsDoc({worker:a.worker, role:a.role, roleRef:a.roleRef, d:a.d, evidence:a.evidence||{},
-   summary:sdsSummaryText(a.worker,a.role,'Entered via live assessment')});
+   summary:sdsSummaryText(a.worker,a.role,'Entered via live assessment'), signaturePng:_sig});
  }catch(e){
   wbFail('determination',{message:'the statement could not be prepared ('+((e&&e.message)||e)+')'});return;
  }
