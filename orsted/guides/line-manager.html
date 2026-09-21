@@ -1,0 +1,133 @@
+<!-- GENERATED FILE - DO NOT EDIT.
+     Source: src/guide_linemanager.html + clients/orsted.json
+     Rebuild: python3 build.py orsted -->
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>IR35 Workbench — Line manager guide — Ørsted</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;550;600;650;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#003182;--navy2:#001E5A;--teal:#218380;--magenta:#9C2373;--ink:#231F20;
+      --muted:#6b7280;--line:#DBDBDB;--bg:#F5F5F6;--card:#fff;--amber-bg:#E6EBF5;--warn-bg:#FBF3DA;--warn-line:#EAD89C}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Mulish',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+     background:var(--bg);color:var(--ink);font-size:15px;line-height:1.55}
+.wrap{max-width:820px;margin:0 auto;padding:0 22px 60px}
+header{background:#0C365F;color:#fff;padding:24px 0;margin-bottom:26px}
+header .wrap{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-bottom:0}
+header h1{font-size:20px;font-weight:700;letter-spacing:.2px}
+header .sub{font-size:13px;opacity:.82}
+h2{font-size:22px;font-weight:700;margin:0 0 6px;color:var(--navy2)}
+h3{font-size:15px;font-weight:700;margin:0 0 8px;display:flex;align-items:center;gap:9px}
+h3 .n{background:var(--teal);color:#fff;width:22px;height:22px;border-radius:6px;display:inline-flex;
+      align-items:center;justify-content:center;font-size:12px;flex:0 0 auto}
+.lead{color:var(--muted);margin-bottom:22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:14px}
+.card.key{background:var(--amber-bg);border-color:#c3cfe6}
+.card.warn{background:var(--warn-bg);border-color:var(--warn-line)}
+ol,ul{margin:0 0 0 20px}li{margin-bottom:7px}
+p+p,p+ol,p+ul{margin-top:9px}
+b.t{color:var(--navy)}
+.small{font-size:13.5px;color:var(--muted)}
+.pill{display:inline-block;padding:1px 9px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:.4px}
+.out{background:#E3F0EF;color:var(--teal)}.in{background:#F5E4EF;color:var(--magenta)}.bor{background:var(--amber-bg);color:var(--navy)}
+a{color:var(--teal)}
+footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+@media print{
+  body{background:#fff;font-size:11.5pt}
+  header{background:#0C365F !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .card{break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wrap{max-width:none;padding:0}
+  @page{margin:14mm}
+}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>IR35 Workbench</h1>
+  <div class="sub">Line manager guide &middot; Ørsted &middot; ruleset v0.3</div>
+</div></header>
+
+<div class="wrap">
+
+<h2>Your part in an IR35 determination</h2>
+<p class="lead">A short guide for Ørsted line managers. You do one piece of this: describe how the consultant will actually work, run the determination, and pass the statement to YunoJuno once it is issued.</p>
+
+<div class="card key">
+  <h3>What you are responsible for</h3>
+  <ul>
+    <li><b class="t">Describing the engagement accurately.</b> You know how the work is really done. Everything downstream rests on that.</li>
+    <li><b class="t">You do not issue the statement.</b> You run the determination; the SDS is issued by the Client Administrator, or by the IR35 Escalation Reviewer if the case is borderline.</li>
+    <li><b class="t">You put the issued SDS into YunoJuno.</b> That is the last step, and it is yours.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h3><span class="n">1</span>Signing in</h3>
+  <p><b class="t">There is no password and no authenticator app.</b> You sign in with a six-digit code emailed to you, every time.</p>
+  <ol>
+    <li>Go to <a href="https://ir35workbench.co.uk/orsted/">https://ir35workbench.co.uk/orsted/</a></li>
+    <li>Type your <b class="t">work email address</b> and click <b class="t">Email me a sign-in code</b>.</li>
+    <li>A six-digit code arrives within a minute or so, from <b class="t">IR35 Workbench Team</b> (assessments@ir35workbench.co.uk). If it is not in your inbox, check your junk or quarantine folder.</li>
+    <li>Type the code into the box and click <b class="t">Sign in</b>.</li>
+  </ol>
+  <ul>
+    <li>Each code works <b class="t">once</b>. If you need another, click <b class="t">Send me a new code</b> &mdash; the previous one stops working.</li>
+    <li>Only addresses Ørsted has set up will work. There is no self sign-up.</li>
+    <li>Ignore <b class="t">Sign in with Google</b> and <b class="t">Sign in with Apple</b> &mdash; those are for consultants.</li>
+    <li>You land on the <b class="t">Role Library</b>, which is where an assessment starts. You only ever see your own consultants.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h3><span class="n">2</span>Assessing a consultant</h3>
+  <ol>
+    <li>In the <b class="t">Role Library</b>, find the role and click <b class="t">Pre-fill a worker &rarr;</b>. The role must already be in the library &mdash; if it is not there, ask your Client Administrator to add it before you start.</li>
+    <li><b class="t">New Assessment</b> opens with that role selected. Enter the consultant&rsquo;s <b class="t">name</b> and <b class="t">email address</b>. The email address is how they are invited, so get it right.</li>
+    <li>Answer the <b class="t">first four questions</b> at the top. They are about this particular engagement: whether the contract has <b class="t">already started</b>, whether this consultant has <b class="t">worked for Ørsted before</b>, whether they hold a <b class="t">statutory office</b> such as a directorship or board seat, and whether they are <b class="t">personally named in the contract</b>. Nobody else can answer these for you.</li>
+    <li>Work down the rest of the questions. They are <b class="t">already filled in from the role library</b>. Read each one against this consultant and <b class="t">change anything that differs</b> &mdash; a divergence from the library is recorded, which is the point.</li>
+    <li>Wherever there is a notes box, <b class="t">add a sentence of evidence</b>: what the contract says, what actually happens on site. This is what demonstrates reasonable care if the determination is ever questioned.</li>
+    <li>Complete the <b class="t">engagement details</b>: how the consultant is engaged (direct, through an agency, or through Ascend payroll), the agency&rsquo;s contact email if there is one, and the <b class="t">assignment start date</b>. The statement has to reach everyone in the payment chain, so these are required.</li>
+    <li>Click <b class="t">Run determination</b>.</li>
+  </ol>
+</div>
+
+<div class="card">
+  <h3><span class="n">3</span>What happens next</h3>
+  <ul>
+    <li>The consultant is saved to the <b class="t">Worker Register</b> as <b class="t">Awaiting consultant</b>, and an invitation is emailed to them automatically. <b class="t">No determination has been made and no statement has been issued yet.</b></li>
+    <li>They answer their own questionnaire. <b class="t">Nothing can move until they do</b> &mdash; if they are slow, chase them.</li>
+    <li>Their answers merge with yours and the determination runs. A clear case goes to the Client Administrator to sign off. A borderline case goes to the IR35 Escalation Reviewer first.</li>
+    <li>You can follow all of this in the <b class="t">Worker Register</b>.</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <h3><span class="n">4</span>When the SDS arrives &mdash; put it into YunoJuno</h3>
+  <ol>
+    <li>Once the statement is issued you receive it by email as a PDF, and it is also on the consultant&rsquo;s record in the Workbench.</li>
+    <li><b class="t">Enter it into YunoJuno against the assignment.</b> The Workbench does not do this for you, and the determination is not operationally complete until it is done.</li>
+    <li>Do it promptly. Until the statement is in YunoJuno, the assignment is being run without a recorded status.</li>
+  </ol>
+</div>
+
+<div class="card">
+  <h3><span class="n">5</span>A few things worth knowing</h3>
+  <ul>
+    <li><b class="t">Re-assess on any material change</b> to the role, the rate or the way the work is done. Open the consultant in the Worker Register and update the answers; they are re-merged and re-audited.</li>
+    <li>If the consultant disagrees with their determination they may make representations to Ørsted, who must respond within <b class="t">45 days</b>. Pass anything like that to your Client Administrator.</li>
+    <li>Every action is recorded against your name. Please don&rsquo;t share a sign-in code or assess on someone else&rsquo;s behalf.</li>
+  </ul>
+</div>
+
+<footer>
+Ascend IR35 Workbench &mdash; Ascend People Solutions Ltd IP. Ørsted, as the end-hirer, makes and signs off every determination. Ruleset v0.3 (provisional). Trouble signing in, or any other problem with the platform? Email <a href="mailto:assessments@ir35workbench.co.uk">assessments@ir35workbench.co.uk</a>.
+</footer>
+
+</div>
+</body>
+</html>
