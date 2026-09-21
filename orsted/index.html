@@ -1921,15 +1921,21 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
   try{await processPendingRescores();}catch(e){console.error('rescore sweep failed',e);}
   renderNav();go(defaultTab(CURRENT_USER.role));
  }
+ /* R-19. The roles that sign in with an emailed code and no authenticator
+    app. This list MUST stay identical to wb_mfa_ok() in the database
+    (R-18) - the database is the real boundary, this is only the screen. */
+ var SINGLE_FACTOR_ROLES=['linemanager','clientadmin','internalreviewer','contractor'];
+ var CODE_EMAIL='';
  function abody(){return document.getElementById('wbAuthBody');}
  function aerr(m){var e=document.getElementById('wbAuthErr');if(e)e.textContent=m||'';}
  function afield(id,type,ph){return '<input id="'+id+'" type="'+type+'" placeholder="'+ph+'" autocomplete="'+(type==='password'?'current-password':(type==='email'?'username':'off'))+'" style="width:100%;padding:11px 12px;border:1px solid #DBDBDB;border-radius:9px;font-size:14px;font-family:inherit;margin-bottom:8px">';}
  function abtn(id,label){return '<button id="'+id+'" style="width:100%;margin-top:4px;padding:11px;border:0;border-radius:9px;background:#218380;color:#fff;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit">'+label+'</button>';}
+ function alink(id,label){return '<div style="text-align:center;margin-top:12px"><a id="'+id+'" href="#" style="font-size:12px;color:#218380;font-weight:600;text-decoration:none">'+label+'</a></div>';}
  function aerrline(){return '<div id="wbAuthErr" style="color:#9C2373;font-size:12px;font-weight:700;margin-top:8px;min-height:15px"></div>';}
  function authScreen(){
   var ov=el('div','position:fixed;inset:0;z-index:450;background:linear-gradient(135deg,#0C365F,#001E5A);display:flex;align-items:center;justify-content:center;padding:24px;font-family:Mulish,sans-serif');ov.id='wbAuth';
   ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:400px;width:100%;padding:30px;box-shadow:0 30px 80px rgba(0,0,0,.4)"><img src="Ascend_Logo_Colour.svg" alt="Ascend" style="height:28px;margin-bottom:12px"><h2 style="font-size:18px;margin-bottom:4px">IR35 Workbench — '+esc(TENANT.name)+'</h2><div style="color:#6b7280;font-size:13px;margin-bottom:16px">Client-confidential. Sign in with your account.</div><div id="wbAuthBody"></div></div>';
-  document.body.appendChild(ov);showPassword();
+  document.body.appendChild(ov);showCode();
  }
  var GOOGLE_SVG='<svg width="17" height="17" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18c-.44-1.32-.69-2.73-.69-4.18s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>';
  var APPLE_SVG='<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="#9ca3af"><path d="M16.36 12.78c-.02-2.02 1.65-2.99 1.72-3.04-.94-1.37-2.4-1.56-2.92-1.58-1.24-.13-2.42.73-3.05.73-.63 0-1.6-.71-2.63-.69-1.35.02-2.6.79-3.29 2-1.4 2.43-.36 6.02 1.01 7.99.67.96 1.47 2.04 2.52 2 1.01-.04 1.39-.65 2.62-.65 1.22 0 1.57.65 2.63.63 1.09-.02 1.78-.98 2.45-1.95.77-1.12 1.09-2.2 1.11-2.26-.02-.01-2.13-.82-2.15-3.24zM14.5 6.6c.56-.68.94-1.62.83-2.56-.81.03-1.79.54-2.37 1.21-.52.6-.97 1.56-.85 2.48.9.07 1.83-.46 2.39-1.13z"/></svg>';
@@ -1937,13 +1943,74 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
   return '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px;color:#9ca3af;font-size:11px;font-weight:700"><div style="flex:1;height:1px;background:#e5e7eb"></div>OR<div style="flex:1;height:1px;background:#e5e7eb"></div></div>'
    +'<button id="wbGoogle" style="width:100%;margin-top:0;padding:10px;border:1px solid #DBDBDB;border-radius:9px;background:#fff;color:#3c4043;font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:9px">'+GOOGLE_SVG+'Sign in with Google</button>'
    +'<button id="wbApple" disabled title="Apple sign-in is coming soon" style="width:100%;margin-top:8px;padding:10px;border:1px solid #e5e7eb;border-radius:9px;background:#f3f4f6;color:#9ca3af;font-weight:600;font-size:14px;cursor:not-allowed;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:9px">'+APPLE_SVG+'Sign in with Apple — coming soon</button>'
-   +'<div style="font-size:11px;color:#9ca3af;margin-top:11px;line-height:1.45">'+esc(TENANT.name)+' staff: sign in with your email and password. Social sign-in is for consultant self-service.</div>';
+   +'<div style="font-size:11px;color:#9ca3af;margin-top:11px;line-height:1.45">'+esc(TENANT.name)+' staff: enter your work email address and we will send you a sign-in code. Social sign-in is for consultant self-service.</div>';
+ }
+ /* ---- R-19: sign in with an emailed 6-digit code ---- */
+ function showCode(){
+  abody().innerHTML=afield('wbEmail','email','Your work email address')+aerrline()+abtn('wbSendCode','Email me a sign-in code')+asocialBtns()+alink('wbUsePw','Use a password instead');
+  document.getElementById('wbSendCode').onclick=doSendCode;
+  document.getElementById('wbEmail').addEventListener('keydown',function(e){if(e.key==='Enter')doSendCode();});
+  var g=document.getElementById('wbGoogle');if(g)g.onclick=doGoogle;
+  var p=document.getElementById('wbUsePw');if(p)p.onclick=function(e){e.preventDefault();showPassword();};
+  setTimeout(function(){var x=document.getElementById('wbEmail');if(x)x.focus();},80);
+  if(typeof OAUTH_ERR!=='undefined'&&OAUTH_ERR){aerr(OAUTH_ERR);OAUTH_ERR='';}
+ }
+ async function doSendCode(){
+  aerr('');var email=(document.getElementById('wbEmail').value||'').trim();
+  if(email.indexOf('@')<1){aerr('Enter your work email address.');return;}
+  var b=document.getElementById('wbSendCode');b.disabled=true;b.textContent='Sending\u2026';
+  var r;
+  /* shouldCreateUser:false - there is no self sign-up. An unknown address must
+     be told so, not quietly turned into an account. */
+  try{ r=await window.__sb.auth.signInWithOtp({email:email,options:{shouldCreateUser:false}}); }
+  catch(e){ r={error:{message:(e&&e.message)||'network'}}; }
+  b.disabled=false;b.textContent='Email me a sign-in code';
+  if(r&&r.error){
+   var m=r.error.message||'';
+   if(/not found|signups not allowed|not allowed for otp|user not found/i.test(m)){
+    aerr('We do not recognise that email address. Ask your administrator to set you up.');
+   } else if(/rate|too many|60 seconds|security purposes/i.test(m)){
+    aerr('A code was sent moments ago. Wait a minute, then try again.');
+   } else { aerr(m||'We could not send a code. Please try again.'); }
+   return;
+  }
+  CODE_EMAIL=email;showCodeEntry();
+ }
+ function showCodeEntry(){
+  abody().innerHTML='<div style="font-size:13px;color:#333;margin-bottom:10px">We have emailed a 6-digit code to <strong>'+esc(CODE_EMAIL)+'</strong>. It expires shortly \u2014 enter it below.</div>'
+   +afield('wbCodeIn','text','6-digit code')+aerrline()+abtn('wbCodeGo','Sign in')
+   +alink('wbResend','Send me a new code')+alink('wbBackEmail','Use a different email address');
+  var f=document.getElementById('wbCodeIn');
+  /* lets a phone offer the code from the notification, and shows a number pad */
+  if(f){f.setAttribute('inputmode','numeric');f.setAttribute('autocomplete','one-time-code');f.setAttribute('maxlength','6');}
+  document.getElementById('wbCodeGo').onclick=doVerifyCode;
+  if(f)f.addEventListener('keydown',function(e){if(e.key==='Enter')doVerifyCode();});
+  document.getElementById('wbResend').onclick=function(e){e.preventDefault();aerr('');
+   var em=CODE_EMAIL;showCode();var x=document.getElementById('wbEmail');if(x)x.value=em;doSendCode();};
+  document.getElementById('wbBackEmail').onclick=function(e){e.preventDefault();showCode();};
+  setTimeout(function(){if(f)f.focus();},80);
+ }
+ async function doVerifyCode(){
+  aerr('');var code=(document.getElementById('wbCodeIn').value||'').replace(/\s/g,'');
+  if(!/^[0-9]{6}$/.test(code)){aerr('Enter the 6-digit code from the email.');return;}
+  var b=document.getElementById('wbCodeGo');b.disabled=true;b.textContent='Signing in\u2026';
+  var r;
+  try{ r=await window.__sb.auth.verifyOtp({email:CODE_EMAIL,token:code,type:'email'}); }
+  catch(e){ r={error:{message:(e&&e.message)||'network'}}; }
+  b.disabled=false;b.textContent='Sign in';
+  if(r&&r.error){
+   var m=r.error.message||'';
+   aerr(/expired|invalid/i.test(m)?'That code is wrong or has expired. Ask for a new one.':(m||'Sign-in failed.'));
+   return;
+  }
+  await afterPassword();
  }
  function showPassword(){
-  abody().innerHTML=afield('wbEmail','email','Email')+afield('wbPass','password','Password')+aerrline()+abtn('wbSignIn','Sign in')+asocialBtns();
+  abody().innerHTML=afield('wbEmail','email','Email')+afield('wbPass','password','Password')+aerrline()+abtn('wbSignIn','Sign in')+asocialBtns()+alink('wbUseCode','Email me a sign-in code instead');
   document.getElementById('wbSignIn').onclick=doPassword;
   document.getElementById('wbPass').addEventListener('keydown',function(e){if(e.key==='Enter')doPassword();});
   var g=document.getElementById('wbGoogle');if(g)g.onclick=doGoogle;
+  var c=document.getElementById('wbUseCode');if(c)c.onclick=function(e){e.preventDefault();showCode();};
   setTimeout(function(){var x=document.getElementById('wbEmail');if(x)x.focus();},80);
   if(typeof OAUTH_ERR!=='undefined'&&OAUTH_ERR){aerr(OAUTH_ERR);OAUTH_ERR='';}
  }
@@ -1978,7 +2045,10 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
  }
  async function afterPassword(){
   if(await mustSetPassword()){showSetPassword();return;}
-  if(await sessionRoleKey()==='contractor'){finishAuth();return;}
+  /* R-19. Was contractor-only. The client-side roles now come through the
+     same door: their factor is the emailed code, not an app. Platform and the
+     external reviewer fall through to the MFA path below, unchanged. */
+  if(SINGLE_FACTOR_ROLES.indexOf(await sessionRoleKey())>=0){finishAuth();return;}
   var aal=await window.__sb.auth.mfa.getAuthenticatorAssuranceLevel();
   var cur=aal&&aal.data?aal.data.currentLevel:null,nxt=aal&&aal.data?aal.data.nextLevel:null;
   if(cur==='aal2'){finishAuth();return;}
@@ -2036,13 +2106,16 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
   var r=await window.__sb.auth.updateUser({password:p1,data:{must_set_password:false}});
   b.disabled=false;b.textContent='Set password & continue';
   if(r.error){aerr(r.error.message||'Could not set password.');return;}
-  if(await sessionRoleKey()==='contractor'){finishAuth();return;}
+  /* R-19. Was contractor-only. The client-side roles now come through the
+     same door: their factor is the emailed code, not an app. Platform and the
+     external reviewer fall through to the MFA path below, unchanged. */
+  if(SINGLE_FACTOR_ROLES.indexOf(await sessionRoleKey())>=0){finishAuth();return;}
   await afterPassword();
  }
  /* entry: handle invite/reset, else resume an aal2 session, else show sign-in */
  var INVITE_FLOW = /type=(invite|recovery)/.test((window.location.hash||'')+(window.location.search||''));
  /* Surface an OAuth error handed back on the redirect (e.g. sign-ups off, provider not enabled) */
- var OAUTH_ERR='';try{var _h=(window.location.hash||'')+'&'+(window.location.search||'');var _m=_h.match(/error_description=([^&]+)/);if(_m){OAUTH_ERR=decodeURIComponent(_m[1].replace(/\+/g,' '));}else if(/otp_expired|access_denied|invalid_request/.test(_h)){OAUTH_ERR='That sign-in link has already been used, or has expired. Links are single use for security. Sign in below with your email address and the password you set — or ask for a new link if you have not set one yet.';}
+ var OAUTH_ERR='';try{var _h=(window.location.hash||'')+'&'+(window.location.search||'');var _m=_h.match(/error_description=([^&]+)/);if(_m){OAUTH_ERR=decodeURIComponent(_m[1].replace(/\+/g,' '));}else if(/otp_expired|access_denied|invalid_request/.test(_h)){OAUTH_ERR='That sign-in link has already been used, or has expired. Enter your email address below and we will send you a sign-in code instead.';}
    else if(/[?#&]error=/.test(_h)){OAUTH_ERR='Google sign-in is not available yet — please use your email and password.';}}catch(e){}
  (function boot(){
   var tries=0;(function wait(){
@@ -2057,7 +2130,9 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
        /* WS-05b: a fact about the account, not about the URL they arrived on. */
        if(sess.user&&sess.user.user_metadata&&sess.user.user_metadata.must_set_password===true){
         authScreen();showSetPassword();return;}
-       if(_rk==='contractor'){hydrateAndStart();return;}
+       /* R-19. Was contractor-only, so a returning line manager with a
+          perfectly good aal1 session was bounced back to sign-in. */
+       if(SINGLE_FACTOR_ROLES.indexOf(_rk)>=0){hydrateAndStart();return;}
        var aal=await window.__sb.auth.mfa.getAuthenticatorAssuranceLevel();
        if(aal&&aal.data&&aal.data.currentLevel==='aal2'){hydrateAndStart();return;}
        authScreen();await afterPassword();return;}
