@@ -50,7 +50,8 @@ REQUIRED = ['folder', 'CLIENT_ID', 'TENANT_NAME', 'TENANT_SHORT', 'SECTOR',
 # lives only in the Edge Function secrets and must never appear here.
 
 # source file -> path inside the client folder
-GUIDES = [('guide_hirer.html', os.path.join('guides', 'hirer.html')),
+GUIDES = [('guide_clientadmin.html', os.path.join('guides', 'client-admin.html')),
+          ('guide_linemanager.html', os.path.join('guides', 'line-manager.html')),
           ('guide_contractor.html', os.path.join('guides', 'contractor.html'))]
 
 BANNER = ('<!-- GENERATED FILE - DO NOT EDIT.\n'
