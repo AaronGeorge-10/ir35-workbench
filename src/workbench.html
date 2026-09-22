@@ -2484,6 +2484,8 @@ function wireAssess(){
  const aeg=document.getElementById('aEngagement');if(aeg)aeg.style.display=roleM?'':'none';
  const ar=document.getElementById('aRole');if(ar)ar.placeholder=roleM?'Role title':'Role / assignment';
  const respSeg=document.getElementById('segClient').closest('.seg');if(respSeg)respSeg.style.display=roleM?'none':'';
+ /* R-27 (Aaron, 22 Sep): the engagement chain - route, agency, line manager, start date - is a fact about ONE worker, captured on the per-worker assessment. A library role has no worker and never issues a statement, so it is hidden here. Display only: commitRole() never read these fields. */
+ ['aChain','aChainHint'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=roleM?'none':'';});
  const c=document.getElementById('quiz');let lastg=null,h='';
  currentRuleset().forEach((q,i)=>{const gc=q.band==='minor'?'minor':q.band==='override'?'override':q.band==='context'?'minor':'';if(q.grp!==lastg){h+='<div class="grphead '+gc+'">'+q.grp+'</div>';lastg=q.grp;}
   h+='<div class="q'+(q.resp==='contractor'?' resp-con':'')+'" id="q_'+q.id+'"><div class="qt">'+(q.code||(i+1))+'. '+q.t+'</div>'+(q.h?'<div class="qh"><b>Guidance:</b> '+q.h+'</div>':'')+'<div class="opts'+(q.multi?' multi':'')+'">';
