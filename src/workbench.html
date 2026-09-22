@@ -204,6 +204,7 @@ window.WB={CLIENT_ID:'{{CLIENT_ID}}',TENANT_NAME:'{{TENANT_NAME}}',TENANT_SHORT:
  <div class="right"><b id="hdrTenant">Tenant: {{TENANT_SHORT}}</b><span id="hdrMeta">Workers in scope: 14 · ruleset v0.3</span></div>
 </header>
 <nav id="nav"></nav>
+<style>.wbfoot{display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:space-between;align-items:center;padding:18px 24px;margin-top:28px;border-top:1px solid rgba(0,0,0,.12);font-size:12.5px;opacity:.75}.wbfoot a{color:inherit}@media print{.wbfoot{display:none}}</style>
 <main>
 
 <section class="view active" id="dash">
@@ -315,6 +316,10 @@ window.WB={CLIENT_ID:'{{CLIENT_ID}}',TENANT_NAME:'{{TENANT_NAME}}',TENANT_SHORT:
 <div id="caResult"></div></section>
 <section class="view" id="guides"><div id="guidesBody"></div></section>
 </main>
+<footer class="wbfoot">
+ <span>&copy; Ascend People Solutions Ltd &middot; VAT GB 466 0827 74</span>
+ <span><a href="/privacy">Privacy notice</a> &middot; <a href="/terms">Terms and conditions</a> &middot; <a href="mailto:assessments@ir35workbench.co.uk">assessments@ir35workbench.co.uk</a></span>
+</footer>
 <div id="sdsOverlay"></div>
 <script>
 /* ============================== RULESET v0.3 ==============================
@@ -1255,8 +1260,8 @@ function closeSDS(){const ov=document.getElementById('sdsOverlay');ov.classList.
 
 /* ============================== AUTH / RBAC + TWO-STAGE REVIEW (demonstration access) ============================== */
 const ROLE_TABS={
- platform:['dash','assess','jd','library','register','signoff','review','reviews','audit','analyser','guides'],
- clientadmin:['dash','assess','jd','library','register','signoff','review','reviews','audit','analyser','guides'],
+ platform:['dash','assess','jd','library','register','signoff','review','reviews','audit','guides'],
+ clientadmin:['dash','assess','jd','library','register','signoff','review','reviews','audit','guides'],
  linemanager:['dash','assess','jd','library','register','reviews','audit','guides'],
  internalreviewer:['review','register','audit','guides'],
  reviewer:['review','audit','guides'],
@@ -1329,6 +1334,10 @@ function go(id){
 function initAnalyser(){}
 function caEsc(s){return (s==null?'':String(s)).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
 async function runAnalyser(){
+ /* B-10 (22 Sep 2026): the analyser service is withdrawn until its endpoint
+    authenticates. Belt and braces - the tab is already out of every nav array,
+    so this should be unreachable. Delete this block to restore. */
+ {var _p=document.getElementById('caProg');if(_p){_p.style.display='block';_p.textContent='The Contract Analyser is temporarily unavailable. Please contact assessments@ir35workbench.co.uk.';}return;}
  var f=document.getElementById('caFile'),prog=document.getElementById('caProg'),res=document.getElementById('caResult');
  res.innerHTML='';prog.style.display='block';
  if(!f||!f.files||!f.files[0]){prog.textContent='Choose a contract file first.';return;}
