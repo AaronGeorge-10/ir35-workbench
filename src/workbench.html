@@ -1170,9 +1170,12 @@ function sdsTagHTML(it){
  return '<span class="sds-tag '+cls+'">'+esc(it.tag_label)+'</span>';
 }
 
-function openSDS(ref){
+function openSDS(ref,draft){
  if(CURRENT_USER&&CURRENT_USER.role==='contractor'&&ref!==CURRENT_USER.workerRef){alert('You can only view your own SDS.');return;}
- const sds=DB.sdsFor(ref);
+ /* R-35: a DRAFT is the statement exactly as signing would issue it, built by
+    previewSignoff() from the same engine and buildSdsDoc(). Only the signer
+    sees it, and nothing is stored until they sign. */
+ const sds=draft||DB.sdsFor(ref);
  const ov=document.getElementById('sdsOverlay');
  if(!sds){alert('SDS not found.');return;}
  const doc=sds.document;
@@ -1230,7 +1233,9 @@ function openSDS(ref){
   ?'<p class="small" style="opacity:.65;margin-top:10px">Document seal (SHA-256): '+esc(sds.documentSha)+'</p>'
   :'';
 
- const html='<div class="sds"><div class="sds-toolbar"><button class="btn sec" onclick="closeSDS()">Close</button><button class="btn" onclick="window.print()">Print / Save PDF</button></div><div class="sds-body">'+
+ const html='<div class="sds"><div class="sds-toolbar"><button class="btn sec" onclick="closeSDS()">Close</button><button class="btn'+(sds.draft?' sec':'')+'" onclick="window.print()">Print / Save PDF</button>'
+  +(sds.draft?'<button class="btn" onclick="closeSDS();signOffAndSend(\''+esc(ref)+'\')">Sign off &amp; send &rarr;</button>':'')+'</div><div class="sds-body">'+
+  (sds.draft?'<div class="callout" style="margin-bottom:14px"><b>Draft for your review &mdash; not yet signed or sent.</b> This is exactly the statement that will be issued when you sign. Read the answers and the reasons, then use <b>Sign off &amp; send</b> at the top, or <b>Close</b> if anything needs to change.</div>':'')+
   '<div class="sds-head"><img class="sds-logo-img" src="{{CLIENT_LOGO}}" alt="{{TENANT_NAME}}"><div class="sds-kicker">Issued by {{TENANT_NAME}}<br>Status Determination Statement<br>'+esc(sds.ref)+'</div></div>'+
   '<h1>Status Determination Statement</h1><p class="small">Issued under the off-payroll working rules (Chapter 10, Part 2 ITEPA 2003).</p>'+
   '<div class="meta"><div><b>Worker / PSC</b>'+esc(doc.worker)+'</div><div><b>Role / assignment</b>'+esc(doc.role_title)+'</div><div><b>Role reference</b>'+esc(doc.role_ref||'—')+'</div><div><b>End-hirer (client)</b>'+esc(doc.client_name)+'</div><div><b>SDS reference</b>'+esc(sds.ref)+'</div><div><b>Determination date</b>'+fmtDate(sds.issuedOn)+'</div><div><b>Ruleset</b>'+esc(doc.ruleset_version)+'</div></div>'+
@@ -1795,13 +1800,34 @@ function renderSignoffQueue(){
    +'<td><b>'+esc(w.ref)+'</b></td><td>'+esc(w.worker||'')+'</td><td>'+esc(w.role||'')+'</td>'
    +'<td><span class="flag">'+lbl+'</span></td>'
    +'<td class="small">key '+(w.key==null?'-':w.key)+' / total '+(w.total==null?'-':w.total)+'</td>'
-   +'<td><button class="btn" onclick="signOffAndSend(\''+esc(w.ref)+'\')">Sign off &amp; send &rarr;</button></td></tr>';
+   +'<td><button class="btn" onclick="previewSignoff(\''+esc(w.ref)+'\')">Review &amp; sign &rarr;</button></td></tr>';
  });
  h+='</tbody></table>'
   +'<div style="margin-top:14px;display:flex;gap:10px;align-items:center">'
   +'<button class="btn" onclick="signOffSelected()">Sign off &amp; send selected &rarr;</button>'
   +'<span class="small" id="soProg"></span></div></div>';
  body.innerHTML=h;
+}
+
+/* R-35 (Aaron, 24 Sep 2026): the signer reviews every question and answer
+   before signing. Builds the statement exactly as signOffOne() will - same
+   engine, same drift guard, same buildSdsDoc() - but WITHOUT the signature,
+   and shows it as a draft. Nothing is written until they press Sign off. */
+function previewSignoff(ref){
+ var w=DB.worker(ref);
+ if(!w){ alert('Worker record not found \u2014 reload and try again.'); return; }
+ var d, doc;
+ try{ d=assess(w.answers,RULESET); }
+ catch(e){ alert('The determination could not be recomputed ('+((e&&e.message)||e)+').'); return; }
+ if(d.outcome!==w.outcome){ alert('The answers no longer produce the determination on the record. Re-score '+ref+' before reviewing it.'); return; }
+ try{
+  doc=buildSdsDoc({worker:w.worker, role:w.role, roleRef:w.roleRef, d:d,
+   evidence:w.evidence||{}, summary:sdsSummaryText(w.worker,w.role,w.engagement),
+   outcomeOverride:w.outcome, signaturePng:null});
+ }catch(e){ alert('The statement could not be prepared ('+((e&&e.message)||e)+').'); return; }
+ var t=new Date(), rb=new Date(t.getTime()); rb.setFullYear(rb.getFullYear()+1);
+ openSDS(ref,{draft:true, ref:'Draft \u2014 not yet issued', document:doc,
+  issuedOn:t.toISOString().slice(0,10), reviewBy:rb.toISOString().slice(0,10)});
 }
 
 function signoffToggleAll(box){
