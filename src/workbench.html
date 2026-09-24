@@ -1290,6 +1290,19 @@ function tabsFor(role){return ROLE_TABS[role]||[];}
 function canSignOff(role){return role==='reviewer'||role==='internalreviewer'||role==='platform';}
 function canActStage(role,stage){if(role==='platform')return true;if(stage===1)return role==='internalreviewer';if(stage===2)return role==='reviewer'||role==='internalreviewer';return false;}
 function defaultTab(role){return {platform:'dash',clientadmin:'dash',linemanager:'library',internalreviewer:'review',reviewer:'review',contractor:'mine'}[role]||'dash';}
+/* R-38 (Aaron, 24 Sep 2026): a link in a notification email can open a screen directly,
+   e.g. /orsted/?open=signoff. Honoured only if that screen is one of the signed-in role's
+   own tabs - otherwise the normal landing page. The parameter is then taken out of the
+   address bar so a later refresh behaves normally. It survives the code sign-in because
+   that happens on the same page. */
+function startTab(role){
+ var t=null, q=null;
+ try{ q=new URLSearchParams(window.location.search); t=q.get('open'); }catch(e){}
+ if(!t) return defaultTab(role);
+ try{ q.delete('open'); var qs=q.toString();
+      history.replaceState(null,'',window.location.pathname+(qs?'?'+qs:'')+window.location.hash); }catch(e){}
+ return tabsFor(role).indexOf(t)>=0 ? t : defaultTab(role);
+}
 function navLabel(id){if(CURRENT_USER&&CURRENT_USER.role==='contractor'){if(id==='mine')return 'My IR35 status';if(id==='assess')return 'My questionnaire';}return NAVLABEL[id]||id;}
 let CURRENT_USER=null;
 
@@ -2139,7 +2152,7 @@ function applyRespLock(lock){RESP_LOCK=lock;setResp(lock||'client');var c=docume
      in since the last staff session. Runs the ONE scoring engine and lets
      apply_rescore() run the outcome-change gate in one transaction. */
   try{await processPendingRescores();}catch(e){console.error('rescore sweep failed',e);}
-  renderNav();go(defaultTab(CURRENT_USER.role));
+  renderNav();go(startTab(CURRENT_USER.role));
  }
  /* R-19. The roles that sign in with an emailed code and no authenticator
     app. This list MUST stay identical to wb_mfa_ok() in the database
