@@ -1264,6 +1264,10 @@ function openSDS(ref,draft){
   '<div class="sds-foot">'+esc(st.footer||'')+'</div>'+seal+
   '</div></div>';
  ov.innerHTML=html;ov.classList.add('show');
+ /* R-39: always open at the top, where the Approve / Sign buttons are. The overlay is
+    reused, so it kept the scroll position of whatever was open in it before (e.g. the
+    amend form, which you scroll to the bottom of to save). */
+ ov.scrollTop=0;
 }
 
 function closeSDS(){const ov=document.getElementById('sdsOverlay');ov.classList.remove('show');ov.innerHTML='';}
@@ -1299,13 +1303,27 @@ function defaultTab(role){return {platform:'dash',clientadmin:'dash',linemanager
    address bar so a later refresh behaves normally. It survives the code sign-in because
    that happens on the same page. */
 function startTab(role){
- var t=null, q=null;
+ /* R-39: the requested screen is also kept for 30 minutes in this browser, so it
+    survives anything between clicking the link and finishing the sign-in that
+    loses the address (a page reload, signing in from another tab). Used once,
+    then cleared. With no link, first login still lands on the role's normal
+    home screen (the Role Library for line managers). */
+ var t=null, q=null, K='wbOpenTab';
  try{ q=new URLSearchParams(window.location.search); t=q.get('open'); }catch(e){}
+ if(t){
+  try{ q.delete('open'); var qs=q.toString();
+       history.replaceState(null,'',window.location.pathname+(qs?'?'+qs:'')+window.location.hash); }catch(e){}
+ }else{
+  try{ var sv=JSON.parse(localStorage.getItem(K)||'null');
+       if(sv&&sv.t&&(Date.now()-sv.at)<30*60*1000) t=sv.t; }catch(e){}
+ }
+ try{ localStorage.removeItem(K); }catch(e){}
  if(!t) return defaultTab(role);
- try{ q.delete('open'); var qs=q.toString();
-      history.replaceState(null,'',window.location.pathname+(qs?'?'+qs:'')+window.location.hash); }catch(e){}
  return tabsFor(role).indexOf(t)>=0 ? t : defaultTab(role);
 }
+/* R-39: note the link's screen as soon as the page loads, before any sign-in. */
+(function(){ try{ var t=new URLSearchParams(window.location.search).get('open');
+  if(t&&/^[a-z]{2,12}$/.test(t)) localStorage.setItem('wbOpenTab',JSON.stringify({t:t,at:Date.now()})); }catch(e){} })();
 function navLabel(id){if(CURRENT_USER&&CURRENT_USER.role==='contractor'){if(id==='mine')return 'My IR35 status';if(id==='assess')return 'My questionnaire';}return NAVLABEL[id]||id;}
 let CURRENT_USER=null;
 
