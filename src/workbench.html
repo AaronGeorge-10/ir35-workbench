@@ -599,6 +599,7 @@ function workerRowToView(r){return{
  answers:r.answers||{}, evidence:r.evidence||{},
  hirerAnswers:r.hirer_answers||{}, contractorAnswers:r.contractor_answers||{},
  contractorEvidence:r.contractor_evidence||{}, contractorFullSubmission:r.contractor_submission||null,
+ lineManagerEmail:r.line_manager_email||null, returnedNote:r.returned_note||null, returnedAt:dts(r.returned_at), returnedBy:r.returned_by||null,
  contractorSubmittedOn:d10(r.contractor_submitted_on), contractorSubmittedBy:r.contractor_submitted_by||null,
  outcome:r.outcome, key:r.key_score, minor:r.minor_score, total:r.total_score, office:!!r.office_holder,
  status:r.status, sdsState:r.sds_state||'None',
@@ -836,7 +837,7 @@ function renderRegister(){
    .sort((x,y)=>String(y.ref||'').localeCompare(String(x.ref||''),undefined,{numeric:true}));
  document.getElementById('regBody').innerHTML=rows.map(w=>{
   const sdsLink=w.sdsState==='Issued'?'<a href="#" style="color:var(--teal);font-weight:600" onclick="openSDS(\''+w.ref+'\');return false;">View SDS</a>':(w.sdsState==='Referred'?'<span class="pill p-border">Referred</span>':'<span class="small">—</span>');
-  return '<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.worker)+'</td><td class="small">'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>'+pill(w.status)+'</td><td class="small">'+sdsLink+'</td><td class="small">'+inviteCell(w)+'<div class="small" data-fee="'+esc(w.ref)+'"></div></td><td class="small">'+(w.nextReview?fmtDate(w.nextReview):'—')+'</td></tr>';
+  return '<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.worker)+'</td><td class="small">'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>'+pill(w.status)+(w.status==='Returned for information'&&canAmend(w)?'<div class="small" style="margin-top:4px"><a href="#" style="color:var(--teal);font-weight:600" onclick="amendAssessment(\''+w.ref+'\');return false;">Update assessment &rarr;</a></div>':'')+'</td><td class="small">'+sdsLink+'</td><td class="small">'+inviteCell(w)+'<div class="small" data-fee="'+esc(w.ref)+'"></div></td><td class="small">'+(w.nextReview?fmtDate(w.nextReview):'—')+'</td></tr>';
  }).join('');
  document.getElementById('regCount').textContent=rows.length+' of '+ws.length+' workers';
  decorateFees();
@@ -1141,8 +1142,9 @@ function buildSdsDoc(o){
  if(!items.length)throw new Error('no questions to record on the statement');
  var ev=[];
  Object.keys(o.evidence||{}).forEach(function(id){
+  if(!o.evidence[id]) return;   /* R-36: a cleared note is stored as null - never print it */
   var q=RULESET.find(function(x){return x.id===id;});
-  ev.push({question:q?q.t.replace(/[—].*$/,'').trim():id, note:o.evidence[id]});
+  ev.push({question:id==='_additional'?'Additional information':(q?q.t.replace(/[—].*$/,'').trim():id), note:o.evidence[id]});
  });
  return {
   template_version:SDS_TEMPLATE_VERSION,
@@ -1234,8 +1236,8 @@ function openSDS(ref,draft){
   :'';
 
  const html='<div class="sds"><div class="sds-toolbar"><button class="btn sec" onclick="closeSDS()">Close</button><button class="btn'+(sds.draft?' sec':'')+'" onclick="window.print()">Print / Save PDF</button>'
-  +(sds.draft?'<button class="btn" onclick="closeSDS();signOffAndSend(\''+esc(ref)+'\')">Sign off &amp; send &rarr;</button>':'')+'</div><div class="sds-body">'+
-  (sds.draft?'<div class="callout" style="margin-bottom:14px"><b>Draft for your review &mdash; not yet signed or sent.</b> This is exactly the statement that will be issued when you sign. Read the answers and the reasons, then use <b>Sign off &amp; send</b> at the top, or <b>Close</b> if anything needs to change.</div>':'')+
+  +(sds.draft?draftActionButtons(ref):'')+'</div><div class="sds-body">'+
+  (sds.draft?'<div class="callout" style="margin-bottom:14px"><b>Draft for your review &mdash; not yet signed or sent.</b> This is exactly the statement that will be issued when you sign. Read the answers and the reasons, then use <b>Sign off &amp; send</b> at the top. If something needs to change, use <b>Amend answers</b>, <b>Return for more information</b> (to the line manager) or <b>Refer to internal reviewer</b>.</div>':'')+
   '<div class="sds-head"><img class="sds-logo-img" src="{{CLIENT_LOGO}}" alt="{{TENANT_NAME}}"><div class="sds-kicker">Issued by {{TENANT_NAME}}<br>Status Determination Statement<br>'+esc(sds.ref)+'</div></div>'+
   '<h1>Status Determination Statement</h1><p class="small">Issued under the off-payroll working rules (Chapter 10, Part 2 ITEPA 2003).</p>'+
   '<div class="meta"><div><b>Worker / PSC</b>'+esc(doc.worker)+'</div><div><b>Role / assignment</b>'+esc(doc.role_title)+'</div><div><b>Role reference</b>'+esc(doc.role_ref||'—')+'</div><div><b>End-hirer (client)</b>'+esc(doc.client_name)+'</div><div><b>SDS reference</b>'+esc(sds.ref)+'</div><div><b>Determination date</b>'+fmtDate(sds.issuedOn)+'</div><div><b>Ruleset</b>'+esc(doc.ruleset_version)+'</div></div>'+
@@ -1773,6 +1775,7 @@ function signoffPending(){
    return (w.outcome==='out'||w.outcome==='in')
        && w.sdsState!=='Issued'
        && !w.rescoreRequired
+       && w.status!=='Returned for information'
        && !DB.reviewFor(w.ref)
        && !DB.sdsFor(w.ref);
   });
@@ -1828,6 +1831,100 @@ function previewSignoff(ref){
  var t=new Date(), rb=new Date(t.getTime()); rb.setFullYear(rb.getFullYear()+1);
  openSDS(ref,{draft:true, ref:'Draft \u2014 not yet issued', document:doc,
   issuedOn:t.toISOString().slice(0,10), reviewBy:rb.toISOString().slice(0,10)});
+}
+
+/* ===== R-36 (Aaron, 24 Sep 2026): what the signer can do instead of signing =====
+   From the draft statement the client administrator can amend the answers, return
+   the case to the line manager for more information, or refer it to the internal
+   reviewer. The database enforces every rule (refer_at_signoff, return_for_information,
+   amend_assessment); these functions only collect the input and report the result. */
+function draftActionButtons(ref){
+ var r=esc(ref);
+ return '<button class="btn sec" onclick="amendAssessment(\''+r+'\')">Amend answers</button>'
+  +'<button class="btn sec" onclick="returnForInformation(\''+r+'\')">Return for more information</button>'
+  +'<button class="btn sec" onclick="referAtSignoff(\''+r+'\')">Refer to internal reviewer</button>'
+  +'<button class="btn" onclick="closeSDS();signOffAndSend(\''+r+'\')">Sign off &amp; send &rarr;</button>';
+}
+async function referAtSignoff(ref){
+ var reason=window.prompt('Refer '+ref+' to the internal reviewer instead of signing it.\n\nWhy? The reviewer sees this, and it is recorded on the audit trail (at least 10 characters).','');
+ if(reason===null) return;
+ var r=await window.__sb.rpc('refer_at_signoff',{p_worker_ref:ref,p_reason:reason});
+ if(r.error){ wbFail('the referral',r.error); return; }
+ closeSDS(); await wbRefresh('the referral'); renderNav(); try{renderSignoffQueue();}catch(e){}
+ alert(ref+' has been referred to the internal reviewer. It has left your Sign-off Queue and is now in the Review Queue. The reviewer is emailed within 5 minutes.');
+}
+async function returnForInformation(ref){
+ var w=DB.worker(ref);
+ var note=window.prompt('Return '+ref+' to the line manager'+(w&&w.lineManagerEmail?' ('+w.lineManagerEmail+')':'')+' for more information.\n\nWhat do they need to supply or check? They are emailed this note (at least 10 characters).','');
+ if(note===null) return;
+ var r=await window.__sb.rpc('return_for_information',{p_worker_ref:ref,p_note:note});
+ if(r.error){ wbFail('returning the case',r.error); return; }
+ closeSDS(); await wbRefresh('returning the case'); renderNav(); try{renderSignoffQueue();}catch(e){}
+ alert(ref+' has been returned to '+((r.data&&r.data.returned_to)||'the line manager')+', who is emailed within 5 minutes. It comes back to your Sign-off Queue when they resubmit it.');
+}
+function canAmend(w){
+ if(!w||!CURRENT_USER) return false;
+ var role=CURRENT_USER.role;
+ if(role==='platform'||role==='clientadmin') return true;
+ return role==='linemanager'&&w.status==='Returned for information';
+}
+function amendAssessment(ref){
+ var w=DB.worker(ref);
+ if(!canAmend(w)){ alert('You cannot amend this assessment.'); return; }
+ var ov=document.getElementById('sdsOverlay');
+ var ans=Object.assign({},w.hirerAnswers||{},w.contractorAnswers||{});
+ var ev=w.evidence||{};
+ var bar='<button class="btn sec" onclick="closeSDS()">Cancel</button><button class="btn" onclick="saveAmendment(\''+esc(ref)+'\')">Save changes &rarr;</button>';
+ var h='<div class="sds"><div class="sds-toolbar">'+bar+'</div><div class="sds-body">'
+  +'<h1>Amend the assessment</h1>'
+  +'<p class="small"><b>'+esc(w.worker||'')+'</b> &middot; '+esc(w.role||'')+' &middot; '+esc(ref)+'</p>'
+  +'<p class="small">Change any answer and add any information you need. The {{WORKER_TERM}}&rsquo;s own answers are shown but cannot be changed. '
+  +'When you save, the determination is recalculated. If the result changes, the case goes to the internal reviewer instead of straight to sign-off.</p>'
+  +(w.returnedNote?'<div class="callout" style="margin:10px 0"><b>Information requested'+(w.returnedBy?' by '+esc(w.returnedBy):'')+':</b> '+esc(w.returnedNote)+'</div>':'');
+ var grp=null;
+ RULESET.forEach(function(q){
+  if(q.grp!==grp){ grp=q.grp; h+='<h2>'+esc(grp)+'</h2>'; }
+  var label=esc(q.t.replace(/[\u2014].*$/,'').trim());
+  if(q.resp==='contractor'){
+   h+='<div class="sds-q" style="margin-bottom:10px">'+label+': <span class="a">'+esc(sdsAnswerText({q:q,ans:ans[q.id],val:0}))+'</span> <span class="small">(answered by the {{WORKER_TERM}} &mdash; cannot be changed)</span></div>';
+   return;
+  }
+  var cur=ans[q.id];
+  var sel='<select class="amQ" data-q="'+esc(q.id)+'" style="max-width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:8px">'
+   +'<option value=""'+(cur==null?' selected':'')+'>Not answered</option>'
+   +q.opts.map(function(o,i){return '<option value="'+i+'"'+(cur!=null&&String(cur)===String(i)?' selected':'')+'>'+esc(o[0])+'</option>';}).join('')+'</select>';
+  h+='<div class="sds-q" style="margin-bottom:12px">'+label+'<div style="margin-top:4px">'+sel+'</div>'
+   +'<textarea class="qnote amE" data-q="'+esc(q.id)+'" placeholder="Evidence or note (optional)" style="display:block;min-height:34px;margin-top:4px">'+esc(ev[q.id]||'')+'</textarea></div>';
+ });
+ h+='<h2>Additional information</h2><textarea id="amAdditional" class="qnote" style="display:block;min-height:70px" placeholder="Anything else the statement should record (optional)">'+esc(ev._additional||'')+'</textarea>'
+  +'<h2>What did you change, and why?</h2><textarea id="amReason" class="qnote" style="display:block;min-height:60px" placeholder="Required &mdash; recorded on the audit trail (at least 10 characters)"></textarea>'
+  +'<div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">'+bar+'</div>'
+  +'</div></div>';
+ ov.innerHTML=h; ov.classList.add('show'); ov.scrollTop=0;
+}
+async function saveAmendment(ref){
+ var w=DB.worker(ref); if(!w) return;
+ var reason=(document.getElementById('amReason').value||'').trim();
+ if(reason.length<10){ alert('Please say what you changed and why (at least 10 characters).'); return; }
+ var hirer=Object.assign({},w.hirerAnswers||{});
+ document.querySelectorAll('.amQ').forEach(function(s){ var id=s.getAttribute('data-q'); hirer[id]=(s.value==='')?null:Number(s.value); });
+ var evd={}, old=w.evidence||{};
+ document.querySelectorAll('.amE').forEach(function(t){ var id=t.getAttribute('data-q'); var v=(t.value||'').trim(); if(v!==(old[id]||'')) evd[id]=v||null; });
+ var add=(document.getElementById('amAdditional').value||'').trim(); if(add!==(old._additional||'')) evd._additional=add||null;
+ var d=assess(Object.assign({},hirer,w.contractorAnswers||{}),RULESET);
+ var L={out:'Outside IR35',in:'Inside IR35',border:'Borderline'};
+ var msg='Save these changes to '+ref+'?\n\nWith your changes the determination is: '+L[d.outcome]+'.';
+ if(d.outcome!==w.outcome) msg+='\n\nThat is DIFFERENT from before ('+(L[w.outcome]||w.outcome)+'), so the case will go to the internal reviewer instead of the Sign-off Queue.';
+ if(!confirm(msg)) return;
+ var r=await window.__sb.rpc('amend_assessment',{p_worker_ref:ref,p_hirer_answers:hirer,p_evidence:evd,p_reason:reason,
+   p_outcome:d.outcome,p_key_score:d.keyScore,p_minor_score:d.minorScore,p_total_score:d.total,p_office_holder:!!d.office});
+ if(r.error){ wbFail('saving the changes',r.error); return; }
+ closeSDS(); await wbRefresh('saving the changes'); renderNav();
+ try{renderSignoffQueue();}catch(e){} try{renderRegister();}catch(e){}
+ var res=r.data||{};
+ if(res.referred){ alert(ref+' has been updated. The determination is now '+L[d.outcome]+', so it has gone to the internal reviewer, who is emailed within 5 minutes.'); return; }
+ if(CURRENT_USER&&CURRENT_USER.role==='linemanager'){ alert(ref+' has been updated and sent back for sign-off. Thank you.'); return; }
+ previewSignoff(ref);
 }
 
 function signoffToggleAll(box){
