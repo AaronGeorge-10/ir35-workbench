@@ -1281,7 +1281,7 @@ const USERS={
 };
 function tabsFor(role){return ROLE_TABS[role]||[];}
 function canSignOff(role){return role==='reviewer'||role==='internalreviewer'||role==='platform';}
-function canActStage(role,stage){if(role==='platform')return true;if(stage===1)return role==='internalreviewer';if(stage===2)return role==='reviewer';return false;}
+function canActStage(role,stage){if(role==='platform')return true;if(stage===1)return role==='internalreviewer';if(stage===2)return role==='reviewer'||role==='internalreviewer';return false;}
 function defaultTab(role){return {platform:'dash',clientadmin:'dash',linemanager:'library',internalreviewer:'review',reviewer:'review',contractor:'mine'}[role]||'dash';}
 function navLabel(id){if(CURRENT_USER&&CURRENT_USER.role==='contractor'){if(id==='mine')return 'My IR35 status';if(id==='assess')return 'My questionnaire';}return NAVLABEL[id]||id;}
 let CURRENT_USER=null;
@@ -1655,13 +1655,13 @@ function renderReview(){
    evidenceList(w);
   if(r.stage===2&&r.stage1Reason){h+='<div class="callout" style="border-left-color:var(--teal)"><b>Stage 1 (internal) — escalated by '+esc(r.stage1By||'internal reviewer')+':</b> '+esc(r.stage1Reason)+'</div>';}
   if(canAct){
-   h+='<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px"><div class="small" style="font-weight:700;margin-bottom:6px">'+(r.stage===2?'External expert decision (External IR35 Specialist)':'Internal senior reviewer decision')+'</div>'+
+   h+='<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px"><div class="small" style="font-weight:700;margin-bottom:6px">'+(r.stage===2?'Decision after external specialist review \u2014 record the specialist\u2019s view in the reasoning':'Internal senior reviewer decision')+'</div>'+
     '<select id="dec_'+r.workerRef+'" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"><option value="">Select decision…</option><option>Outside</option><option>Inside</option><option>Needs more info</option></select>'+
     '<textarea id="rea_'+r.workerRef+'" class="qnote" placeholder="Reasoning (mandatory) — recorded to the audit trail and referenced on the SDS." style="display:block;min-height:60px"></textarea>'+
     '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="signOff(\''+r.workerRef+'\')">Approve &amp; release SDS →</button>'+
     ((r.stage||1)===1?'<button class="btn sec" onclick="escalate(\''+r.workerRef+'\')">Escalate to external expert →</button>':'')+'</div></div>';
   } else {
-   h+='<div class="callout" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">Awaiting <b>'+(r.stage===2?'the External IR35 Specialist':'the internal senior reviewer')+'</b>. '+(canSignOff(role)?'You do not have authority over this stage.':'Only a designated reviewer can sign off a borderline determination.')+'</div>';
+   h+='<div class="callout" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">Awaiting <b>'+(r.stage===2?'the internal senior reviewer, after external specialist review':'the internal senior reviewer')+'</b>. '+(canSignOff(role)?'You do not have authority over this stage.':'Only a designated reviewer can sign off a borderline determination.')+'</div>';
   }
   h+='</div>';});
  if(done.length){h+='<div class="card"><h3><span class="dot"></span>Closed reviews</h3><table><thead><tr><th>Worker</th><th>Decision</th><th>Resolved at</th><th>By</th></tr></thead><tbody>'+done.map(r=>'<tr><td><b>'+r.workerRef+'</b></td><td>'+(r.decision?pill(r.decision):esc(r.status))+'</td><td class="small">'+esc(r.signedOffAt||'—')+'</td><td class="small">'+esc(r.signedOffBy||r.assignedTo)+'</td></tr>').join('')+'</tbody></table></div>';}
