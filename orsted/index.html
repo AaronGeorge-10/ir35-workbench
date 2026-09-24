@@ -286,7 +286,7 @@ window.WB={CLIENT_ID:'orsted',TENANT_NAME:'Ørsted',TENANT_SHORT:'Orsted',SECTOR
   <span class="chip" id="regCount"></span>
   <button class="btn sec" style="margin-left:auto;padding:8px 16px" onclick="exportRegisterCSV()">Export register (CSV)</button>
  </div>
- <div class="card" style="padding:6px 18px 14px"><table><thead><tr><th>Ref</th><th>Worker / PSC</th><th>Role</th><th>Engagement</th><th>Day rate</th><th>Status</th><th>SDS</th><th>Consultant</th><th>Next review</th></tr></thead><tbody id="regBody"></tbody></table></div>
+ <div class="card" style="padding:6px 18px 14px"><table><thead><tr><th>Ref</th><th>Worker / PSC</th><th>Role</th><th>Engagement</th><th>Status</th><th>SDS</th><th>Consultant</th><th>Next review</th></tr></thead><tbody id="regBody"></tbody></table></div>
 </section>
 
 <section class="view" id="review">
@@ -755,7 +755,7 @@ function renderDashboard(){
   hb('Reviewed / scheduled within 12 months',n?Math.round(ws.filter(w=>w.nextReview).length/n*100):0,'var(--navy)')+
   hb('Borderline cases routed to expert',bor?100:0,'var(--green)');
  const bq=ws.filter(w=>w.outcome==='border');
- document.getElementById('dashBorder').innerHTML='<table><thead><tr><th>Ref</th><th>Role</th><th>Engagement</th><th>Day rate</th><th>Provisional</th><th class="small">Action</th></tr></thead><tbody>'+bq.map(w=>'<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>£'+w.rate+'</td><td>'+pill('Borderline')+'</td><td><a href="#" style="color:var(--teal);font-weight:600" onclick="go(\'review\');return false;">Open review →</a></td></tr>').join('')+'</tbody></table>';
+ document.getElementById('dashBorder').innerHTML='<table><thead><tr><th>Ref</th><th>Role</th><th>Engagement</th><th>Provisional</th><th class="small">Action</th></tr></thead><tbody>'+bq.map(w=>'<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>'+pill('Borderline')+'</td><td><a href="#" style="color:var(--teal);font-weight:600" onclick="go(\'review\');return false;">Open review →</a></td></tr>').join('')+'</tbody></table>';
 }
 function kpi(l,v,d,dir){return '<div class="kpi"><div class="label">'+l+'</div><div class="val">'+v+'</div><div class="delta '+(dir||'')+'">'+d+'</div></div>';}
 
@@ -836,7 +836,7 @@ function renderRegister(){
  const rows=ws.filter(w=>(!f||w.status===f)&&(!q||(w.ref+w.worker+w.role+w.engagement).toLowerCase().includes(q)));
  document.getElementById('regBody').innerHTML=rows.map(w=>{
   const sdsLink=w.sdsState==='Issued'?'<a href="#" style="color:var(--teal);font-weight:600" onclick="openSDS(\''+w.ref+'\');return false;">View SDS</a>':(w.sdsState==='Referred'?'<span class="pill p-border">Referred</span>':'<span class="small">—</span>');
-  return '<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.worker)+'</td><td class="small">'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>£'+w.rate+'</td><td>'+pill(w.status)+'</td><td class="small">'+sdsLink+'</td><td class="small">'+inviteCell(w)+'<div class="small" data-fee="'+esc(w.ref)+'"></div></td><td class="small">'+(w.nextReview?fmtDate(w.nextReview):'—')+'</td></tr>';
+  return '<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.worker)+'</td><td class="small">'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>'+pill(w.status)+'</td><td class="small">'+sdsLink+'</td><td class="small">'+inviteCell(w)+'<div class="small" data-fee="'+esc(w.ref)+'"></div></td><td class="small">'+(w.nextReview?fmtDate(w.nextReview):'—')+'</td></tr>';
  }).join('');
  document.getElementById('regCount').textContent=rows.length+' of '+ws.length+' workers';
  decorateFees();
@@ -2707,7 +2707,7 @@ function renderLibrary(){ensureRoles();EDIT_ROLE_ID=null;
  }).join(''):'<p class="small" style="grid-column:1/-1">'+(q?'No roles match “'+esc(q)+'”.':'No roles in the library yet.'+(canEd?' Click <b>+ Assess a new role</b> to add one.':''))+'</p>');
 }
 
-function exportRegisterCSV(){try{var ws=DB.workers();if(!ws.length){alert('No workers in the register yet.');return;}var rows=[['Ref','Worker / PSC','Role','Engagement','Day rate','Outcome','SDS state','Assessed on','Next review']];ws.forEach(function(w){rows.push([w.ref,w.worker||'',w.role||'',w.engagement||'',w.rate||'',w.status||'',w.sdsState||'',w.assessedOn||'',w.nextReview||'']);});var csv=rows.map(function(r){return r.map(function(c){c=(c==null?'':String(c));return '"'+c.replace(/"/g,'""')+'"';}).join(',');}).join('\r\n');var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='IR35_Register_'+String(TENANT.name||'client').replace(/[^\w]/g,'')+'_'+NOW+'.csv';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();URL.revokeObjectURL(a.href);},100);}catch(e){alert('Export failed: '+e.message);}}
+function exportRegisterCSV(){try{var ws=DB.workers();if(!ws.length){alert('No workers in the register yet.');return;}var rows=[['Ref','Worker / PSC','Role','Engagement','Outcome','SDS state','Assessed on','Next review']];ws.forEach(function(w){rows.push([w.ref,w.worker||'',w.role||'',w.engagement||'',w.status||'',w.sdsState||'',w.assessedOn||'',w.nextReview||'']);});var csv=rows.map(function(r){return r.map(function(c){c=(c==null?'':String(c));return '"'+c.replace(/"/g,'""')+'"';}).join(',');}).join('\r\n');var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='IR35_Register_'+String(TENANT.name||'client').replace(/[^\w]/g,'')+'_'+NOW+'.csv';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();URL.revokeObjectURL(a.href);},100);}catch(e){alert('Export failed: '+e.message);}}
 
 /* ============================================================================
    S-02 · ROLE LIBRARY CUT-OVER (Aaron, 19 Aug 2026)
