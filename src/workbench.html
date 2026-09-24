@@ -1680,12 +1680,12 @@ async function downloadInvoice(id){
 function stageLabel(st){return st===2?'Stage 2 — {{ADVISER_NAME}}':'Stage 1 — {{INTERNAL_REVIEWER}}';}
 function isOpen(r){return r.status&&(r.status.indexOf('Awaiting')===0||r.status.indexOf('Escalated')===0||r.status==='In review'||r.status==='Returned for information');}
 function renderReview(){
- const items=DB.reviews();const open=items.filter(isOpen);const done=items.filter(r=>!isOpen(r));
+ const items=DB.reviews();const open=items.filter(isOpen).sort(function(a,b){return isTestRef(a.workerRef)-isTestRef(b.workerRef);});const done=items.filter(r=>!isOpen(r));
  const role=CURRENT_USER?CURRENT_USER.role:'';
  let h='<div class="callout" style="margin-bottom:14px"><b>Two-stage gate.</b> A borderline case goes first to an <b>internal senior reviewer</b> (Stage 1), who can approve and release the SDS or escalate to the <b>external legal/tax expert</b> (Stage 2). No borderline case becomes an SDS without a signed-off decision and reasoning at one of these stages — enforced in the data model.</div>';
  if(!open.length)h+='<div class="card"><p class="small">No items awaiting review.</p></div>';
  open.forEach(r=>{const w=DB.worker(r.workerRef);const canAct=canActStage(role,r.stage||1);
-  h+='<div class="reviewcard"><h3 style="display:flex;align-items:center;gap:8px;font-size:14px"><span class="dot"></span>'+r.workerRef+' — '+esc(w?w.role:'')+' '+pill(r.reason&&r.reason!=='Borderline'?capOutcome(w?w.outcome:'border'):'Borderline')+' <span class="rev-pill '+(r.stage===2?'rev-soon':'rev-over')+'">'+stageLabel(r.stage||1)+'</span></h3>'+
+  h+='<div class="reviewcard"><h3 style="display:flex;align-items:center;gap:8px;font-size:14px"><span class="dot"></span>'+r.workerRef+' — '+esc(w?w.role:'')+(w&&isTestWorkerName(w.worker)?testTag():'')+' '+pill(r.reason&&r.reason!=='Borderline'?capOutcome(w?w.outcome:'border'):'Borderline')+' <span class="rev-pill '+(r.stage===2?'rev-soon':'rev-over')+'">'+stageLabel(r.stage||1)+'</span></h3>'+
    '<div class="small" style="margin:6px 0">Raised '+r.raisedAt+' · now with <b>'+esc(r.assignedTo)+'</b> · SLA due <b>'+r.slaDue+'</b> · ruleset '+r.rulesetVersion+'</div>'+
    (r.reason&&r.reason!=='Borderline'
     ? '<div class="callout" style="border-left-color:#c9860a"><b>Why this is here:</b> '+esc(r.reason)+'. Recomputed key '+sgn(w?w.key:0)+' / 30, total '+sgn(w?w.total:0)+' \u2014 now '+esc(capOutcome(w?w.outcome:'border'))+'. The {{WORKER_TERM}} supplied '+esc(contractorCodes())+'; the hirer\u2019s own answers are unchanged. Any statement already issued is held pending your sign-off.</div>'
@@ -1813,6 +1813,12 @@ function chainFromForm(){
 }
 
 /* Eligible = determined, clear, not yet issued, nothing pending against it. */
+/* R-40 (Aaron, 24 Sep 2026): test cases ("ZZ TEST ...") sit at the bottom of both queues with a
+   grey TEST label, so they never sit above real work. Not hidden: Ascend's test logins use the
+   same roles as Julian and Sam and need to see them. */
+function isTestWorkerName(n){ return /^ZZ TEST/i.test(String(n||'')); }
+function isTestRef(ref){ var w=null; try{ w=DB.worker(ref); }catch(e){} return !!(w&&isTestWorkerName(w.worker)); }
+function testTag(){ return ' <span style="display:inline-block;background:#E6E6E6;color:#555;border-radius:4px;padding:1px 6px;font-size:10.5px;font-weight:700;letter-spacing:.04em;vertical-align:middle">TEST</span>'; }
 function signoffPending(){
  try{
   return (DB.workers()||[]).filter(function(w){
@@ -1822,7 +1828,7 @@ function signoffPending(){
        && w.status!=='Returned for information'
        && !DB.reviewFor(w.ref)
        && !DB.sdsFor(w.ref);
-  });
+  }).sort(function(a,b){ return isTestWorkerName(a.worker)-isTestWorkerName(b.worker); });
  }catch(e){ return []; }
 }
 
@@ -1844,7 +1850,7 @@ function renderSignoffQueue(){
  rows.forEach(function(w){
   var lbl=(w.outcome==='out')?'Outside IR35':'Inside IR35';
   h+='<tr><td><input type="checkbox" class="soPick" value="'+esc(w.ref)+'"></td>'
-   +'<td><b>'+esc(w.ref)+'</b></td><td>'+esc(w.worker||'')+'</td><td>'+esc(w.role||'')+'</td>'
+   +'<td><b>'+esc(w.ref)+'</b></td><td>'+esc(w.worker||'')+(isTestWorkerName(w.worker)?testTag():'')+'</td><td>'+esc(w.role||'')+'</td>'
    +'<td><span class="flag">'+lbl+'</span></td>'
    +'<td class="small">key '+(w.key==null?'-':w.key)+' / total '+(w.total==null?'-':w.total)+'</td>'
    +'<td><button class="btn" onclick="previewSignoff(\''+esc(w.ref)+'\')">Review &amp; sign &rarr;</button></td></tr>';
