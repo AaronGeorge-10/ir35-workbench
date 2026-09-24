@@ -1236,8 +1236,8 @@ function openSDS(ref,draft){
   :'';
 
  const html='<div class="sds"><div class="sds-toolbar"><button class="btn sec" onclick="closeSDS()">Close</button><button class="btn'+(sds.draft?' sec':'')+'" onclick="window.print()">Print / Save PDF</button>'
-  +(sds.draft?draftActionButtons(ref):'')+'</div><div class="sds-body">'+
-  (sds.draft?'<div class="callout" style="margin-bottom:14px"><b>Draft for your review &mdash; not yet signed or sent.</b> This is exactly the statement that will be issued when you sign. Read the answers and the reasons, then use <b>Sign off &amp; send</b> at the top. If something needs to change, use <b>Amend answers</b>, <b>Return for more information</b> (to the line manager) or <b>Refer to internal reviewer</b>.</div>':'')+
+  +(sds.draft?(sds.review?reviewDraftButtons(ref):draftActionButtons(ref)):'')+'</div><div class="sds-body">'+
+  (sds.draft?'<div class="callout" style="margin-bottom:14px"><b>Draft for your review &mdash; not yet signed or sent.</b> This is exactly the statement that will be issued when you sign. Read the answers and the reasons, then use '+(sds.review?'<b>Approve &amp; release SDS</b> at the top. If something needs to change, use <b>Amend answers</b> or <b>Return for more information</b> (to the line manager).':'<b>Sign off &amp; send</b> at the top. If something needs to change, use <b>Amend answers</b>, <b>Return for more information</b> (to the line manager) or <b>Refer to internal reviewer</b>.')+'</div>':'')+
   '<div class="sds-head"><img class="sds-logo-img" src="{{CLIENT_LOGO}}" alt="{{TENANT_NAME}}"><div class="sds-kicker">Issued by {{TENANT_NAME}}<br>Status Determination Statement<br>'+esc(sds.ref)+'</div></div>'+
   '<h1>Status Determination Statement</h1><p class="small">Issued under the off-payroll working rules (Chapter 10, Part 2 ITEPA 2003).</p>'+
   '<div class="meta"><div><b>Worker / PSC</b>'+esc(doc.worker)+'</div><div><b>Role / assignment</b>'+esc(doc.role_title)+'</div><div><b>Role reference</b>'+esc(doc.role_ref||'—')+'</div><div><b>End-hirer (client)</b>'+esc(doc.client_name)+'</div><div><b>SDS reference</b>'+esc(sds.ref)+'</div><div><b>Determination date</b>'+fmtDate(sds.issuedOn)+'</div><div><b>Ruleset</b>'+esc(doc.ruleset_version)+'</div></div>'+
@@ -1647,7 +1647,7 @@ async function downloadInvoice(id){
 
 /* ---------- two-stage review (overrides chunk-5 versions) ---------- */
 function stageLabel(st){return st===2?'Stage 2 — {{ADVISER_NAME}}':'Stage 1 — {{INTERNAL_REVIEWER}}';}
-function isOpen(r){return r.status&&(r.status.indexOf('Awaiting')===0||r.status.indexOf('Escalated')===0||r.status==='In review');}
+function isOpen(r){return r.status&&(r.status.indexOf('Awaiting')===0||r.status.indexOf('Escalated')===0||r.status==='In review'||r.status==='Returned for information');}
 function renderReview(){
  const items=DB.reviews();const open=items.filter(isOpen);const done=items.filter(r=>!isOpen(r));
  const role=CURRENT_USER?CURRENT_USER.role:'';
@@ -1661,11 +1661,15 @@ function renderReview(){
     : '<div class="callout"><b>Engine lean:</b> Borderline'+(w&&w.full?' — key '+sgn(w.key)+' / 30, total '+sgn(w.total)+'. The key tests are not clearly positive, so the engine declined to determine.':' — mixed indicators across the key tests.')+'</div>')+
    evidenceList(w);
   if(r.stage===2&&r.stage1Reason){h+='<div class="callout" style="border-left-color:var(--teal)"><b>Stage 1 (internal) — escalated by '+esc(r.stage1By||'internal reviewer')+':</b> '+esc(r.stage1Reason)+'</div>';}
-  if(canAct){
+  if(r.status==='Returned for information'){
+   h+='<div class="callout" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px"><b>Returned to the line manager for more information'+(w&&w.returnedAt?' on '+esc(fmtDate(w.returnedAt)):'')+'.</b> '+(w&&w.returnedNote?esc(w.returnedNote)+' ':'')+'It comes back here when they update it.</div>';
+  }else if(canAct){
    h+='<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px"><div class="small" style="font-weight:700;margin-bottom:6px">'+(r.stage===2?'Decision after external specialist review \u2014 record the specialist\u2019s view in the reasoning':'Internal senior reviewer decision')+'</div>'+
     '<select id="dec_'+r.workerRef+'" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"><option value="">Select decision…</option><option>Outside</option><option>Inside</option><option>Needs more info</option></select>'+
     '<textarea id="rea_'+r.workerRef+'" class="qnote" placeholder="Reasoning (mandatory) — recorded to the audit trail and referenced on the SDS." style="display:block;min-height:60px"></textarea>'+
-    '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="signOff(\''+r.workerRef+'\')">Approve &amp; release SDS →</button>'+
+    '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="previewReview(\''+r.workerRef+'\')">Review &amp; approve →</button>'+
+    '<button class="btn sec" onclick="amendAssessment(\''+r.workerRef+'\')">Amend answers</button>'+
+    '<button class="btn sec" onclick="returnForInformation(\''+r.workerRef+'\')">Return for more information</button>'+
     ((r.stage||1)===1?'<button class="btn sec" onclick="escalate(\''+r.workerRef+'\')">Escalate to external expert →</button>':'')+'</div></div>';
   } else {
    h+='<div class="callout" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">Awaiting <b>'+(r.stage===2?'the internal senior reviewer, after external specialist review':'the internal senior reviewer')+'</b>. '+(canSignOff(role)?'You do not have authority over this stage.':'Only a designated reviewer can sign off a borderline determination.')+'</div>';
@@ -1706,10 +1710,13 @@ async function signOff(ref){
  if(dec==='Outside'||dec==='Inside'){
   const w=DB.worker(ref);
   if(!w){alert('Worker record not found \u2014 reload and try again.');return;}
+  /* R-37: the reviewer's statement carries their signature, exactly as the Sign-off Queue's does. */
+  var _sig=await mySignaturePng();
+  if(!_sig){alert('No signature is held for your account, so this statement cannot be signed. Ask Ascend to add your signature, then approve again.');return;}
   try{
    _doc=buildSdsDoc({worker:w.worker, role:w.role, roleRef:w.roleRef, d:assess(w.answers,RULESET),
     evidence:w.evidence||{}, summary:sdsSummaryText(w.worker,w.role,w.engagement),
-    outcomeOverride:(dec==='Outside')?'out':'in'});
+    outcomeOverride:(dec==='Outside')?'out':'in', signaturePng:_sig});
   }catch(e){
    wbFail('sign-off',{message:'the statement could not be prepared ('+((e&&e.message)||e)+')'});return;
   }
@@ -1717,7 +1724,13 @@ async function signOff(ref){
  const r=await window.__sb.rpc('record_review_decision',{p_worker_ref:ref,p_decision:dec,p_reasoning:rea,p_document:_doc});
  if(r.error){wbFail('sign-off',r.error);return;}
  if(!await wbRefresh('sign-off')){return;} renderNav();
- if(r.data&&r.data.sds_issued){openSDS(ref);}else{go('review');}
+ if(r.data&&r.data.sds_issued){
+  /* R-37: until now a reviewer-issued statement was never sent to the chain. */
+  var dv=await deliverSds(ref);
+  if(dv.sendError) alert('The statement was SIGNED AND ISSUED, but it was NOT SENT.\n\n'+dv.sendError+'\n\nThe statement exists and is on the record. Nobody in the chain has received it yet.');
+  else alert('Statement signed and sent to '+dv.sent+' recipient'+(dv.sent===1?'':'s')+(dv.failed?(', '+dv.failed+' FAILED \u2014 check the delivery record'):'')+'.');
+  openSDS(ref);
+ }else{go('review');}
 }
 /* B-07 / D-06: migrateReviews() deleted. It forced a FULL BLOB UPSERT on every
    page load, so merely opening the tool clobbered whatever anyone else had
@@ -1859,14 +1872,62 @@ async function returnForInformation(ref){
  if(note===null) return;
  var r=await window.__sb.rpc('return_for_information',{p_worker_ref:ref,p_note:note});
  if(r.error){ wbFail('returning the case',r.error); return; }
- closeSDS(); await wbRefresh('returning the case'); renderNav(); try{renderSignoffQueue();}catch(e){}
+ closeSDS(); await wbRefresh('returning the case'); renderNav(); try{renderSignoffQueue();}catch(e){} try{ if(document.getElementById('reviewList')) renderReview(); }catch(e){}
  alert(ref+' has been returned to '+((r.data&&r.data.returned_to)||'the line manager')+', who is emailed within 5 minutes. It comes back to your Sign-off Queue when they resubmit it.');
+}
+/* R-37 (Aaron, 24 Sep 2026): the same choices for the internal reviewer in the Review Queue.
+   previewReview() shows the statement exactly as Approve & release would issue it,
+   with the reviewer's chosen decision and reasoning, before anything is written. */
+function reviewDraftButtons(ref){
+ var r=esc(ref);
+ return '<button class="btn sec" onclick="amendAssessment(\''+r+'\')">Amend answers</button>'
+  +'<button class="btn sec" onclick="returnForInformation(\''+r+'\')">Return for more information</button>'
+  +'<button class="btn" onclick="closeSDS();signOff(\''+r+'\')">Approve &amp; release SDS &rarr;</button>';
+}
+function previewReview(ref){
+ var dec=(document.getElementById('dec_'+ref)||{}).value||'';
+ var rea=((document.getElementById('rea_'+ref)||{}).value||'').trim();
+ if(!dec){ alert('Select a decision first (Outside, Inside or Needs more info).'); return; }
+ if(!rea){ alert('Reasoning is mandatory \u2014 it is recorded on the audit trail and printed on the statement.'); return; }
+ if(dec!=='Outside'&&dec!=='Inside'){ signOff(ref); return; }
+ var w=DB.worker(ref);
+ if(!w){ alert('Worker record not found \u2014 reload and try again.'); return; }
+ var doc;
+ try{
+  doc=buildSdsDoc({worker:w.worker, role:w.role, roleRef:w.roleRef, d:assess(w.answers,RULESET),
+   evidence:w.evidence||{}, summary:sdsSummaryText(w.worker,w.role,w.engagement),
+   outcomeOverride:(dec==='Outside')?'out':'in', signaturePng:null});
+ }catch(e){ alert('The statement could not be prepared ('+((e&&e.message)||e)+').'); return; }
+ var t=new Date(), rb=new Date(t.getTime()); rb.setFullYear(rb.getFullYear()+1);
+ openSDS(ref,{draft:true, review:true, ref:'Draft \u2014 not yet issued', document:doc,
+  issuedOn:t.toISOString().slice(0,10), reviewBy:rb.toISOString().slice(0,10), reviewerReasoning:rea});
+}
+/* Sends an issued statement to everyone in the chain (the same call the Sign-off Queue makes). */
+async function deliverSds(ref){
+ var s=null; try{ s=(await window.__sb.auth.getSession()).data.session; }catch(e){}
+ if(!s) return {sent:0, sendError:'your session expired before it could be sent'};
+ try{
+  var res=await fetch(WB.SUPABASE_URL+'/functions/v1/issue-sds',{method:'POST',
+   headers:{'Authorization':'Bearer '+s.access_token,'apikey':WB.SUPABASE_ANON_KEY,'Content-Type':'application/json'},
+   body:JSON.stringify({worker_ref:ref})});
+  var body=await res.json();
+  if(!res.ok&&res.status!==207) return {sent:0, sendError:(body&&body.error)||('HTTP '+res.status)};
+  return {sent:(body&&body.sent)||0, failed:(body&&body.failed)||0, sds_ref:body&&body.sds_ref, sendError:null};
+ }catch(e){ return {sent:0, sendError:'the delivery service could not be reached ('+((e&&e.message)||e)+')'}; }
 }
 function canAmend(w){
  if(!w||!CURRENT_USER) return false;
  var role=CURRENT_USER.role;
  if(role==='platform'||role==='clientadmin') return true;
+ /* R-37: the internal reviewer (and, at stage 2, the external reviewer) can amend a case open with them */
+ if(role==='internalreviewer'||role==='reviewer'){
+  var rv=openReviewFor(w.ref);
+  return !!rv && rv.status!=='Returned for information' && canActStage(role,rv.stage||1);
+ }
  return role==='linemanager'&&w.status==='Returned for information';
+}
+function openReviewFor(ref){
+ try{ return (DB.reviews()||[]).find(function(r){return r.workerRef===ref&&isOpen(r);})||null; }catch(e){ return null; }
 }
 function amendAssessment(ref){
  var w=DB.worker(ref);
@@ -1879,7 +1940,9 @@ function amendAssessment(ref){
   +'<h1>Amend the assessment</h1>'
   +'<p class="small"><b>'+esc(w.worker||'')+'</b> &middot; '+esc(w.role||'')+' &middot; '+esc(ref)+'</p>'
   +'<p class="small">Change any answer and add any information you need. The {{WORKER_TERM}}&rsquo;s own answers are shown but cannot be changed. '
-  +'When you save, the determination is recalculated. If the result changes, the case goes to the internal reviewer instead of straight to sign-off.</p>'
+  +(openReviewFor(ref)
+    ?'When you save, the determination is recalculated and the case stays with the reviewer to decide.</p>'
+    :'When you save, the determination is recalculated. If the result changes, the case goes to the internal reviewer instead of straight to sign-off.</p>')
   +(w.returnedNote?'<div class="callout" style="margin:10px 0"><b>Information requested'+(w.returnedBy?' by '+esc(w.returnedBy):'')+':</b> '+esc(w.returnedNote)+'</div>':'');
  var grp=null;
  RULESET.forEach(function(q){
@@ -1914,7 +1977,8 @@ async function saveAmendment(ref){
  var d=assess(Object.assign({},hirer,w.contractorAnswers||{}),RULESET);
  var L={out:'Outside IR35',in:'Inside IR35',border:'Borderline'};
  var msg='Save these changes to '+ref+'?\n\nWith your changes the determination is: '+L[d.outcome]+'.';
- if(d.outcome!==w.outcome) msg+='\n\nThat is DIFFERENT from before ('+(L[w.outcome]||w.outcome)+'), so the case will go to the internal reviewer instead of the Sign-off Queue.';
+ var _inReview=!!openReviewFor(ref);
+ if(d.outcome!==w.outcome&&!_inReview) msg+='\n\nThat is DIFFERENT from before ('+(L[w.outcome]||w.outcome)+'), so the case will go to the internal reviewer instead of the Sign-off Queue.';
  if(!confirm(msg)) return;
  var r=await window.__sb.rpc('amend_assessment',{p_worker_ref:ref,p_hirer_answers:hirer,p_evidence:evd,p_reason:reason,
    p_outcome:d.outcome,p_key_score:d.keyScore,p_minor_score:d.minorScore,p_total_score:d.total,p_office_holder:!!d.office});
@@ -1924,6 +1988,7 @@ async function saveAmendment(ref){
  var res=r.data||{};
  if(res.referred){ alert(ref+' has been updated. The determination is now '+L[d.outcome]+', so it has gone to the internal reviewer, who is emailed within 5 minutes.'); return; }
  if(CURRENT_USER&&CURRENT_USER.role==='linemanager'){ alert(ref+' has been updated and sent back for sign-off. Thank you.'); return; }
+ if(_inReview){ try{go('review');}catch(e){} alert(ref+' has been updated. The determination now computes as '+L[d.outcome]+'. It stays in the Review Queue for your decision.'); return; }
  previewSignoff(ref);
 }
 
