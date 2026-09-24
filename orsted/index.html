@@ -833,7 +833,10 @@ function renderRegister(){
     line_manager_email or created_by - so every row reaching this function is
     already theirs. Do not reintroduce a client-side owner filter here: it would be a
     second, weaker copy of a rule the database already enforces. */
- const rows=ws.filter(w=>(!f||w.status===f)&&(!q||(w.ref+w.worker+w.role+w.engagement).toLowerCase().includes(q)));
+ const rows=ws.filter(w=>(!f||w.status===f)&&(!q||(w.ref+w.worker+w.role+w.engagement).toLowerCase().includes(q)))
+   /* R-34 (Aaron, 24 Sep 2026): newest first. References are allocated in sequence, so
+      a numeric descending sort on the reference puts the latest worker at the top. */
+   .sort((x,y)=>String(y.ref||'').localeCompare(String(x.ref||''),undefined,{numeric:true}));
  document.getElementById('regBody').innerHTML=rows.map(w=>{
   const sdsLink=w.sdsState==='Issued'?'<a href="#" style="color:var(--teal);font-weight:600" onclick="openSDS(\''+w.ref+'\');return false;">View SDS</a>':(w.sdsState==='Referred'?'<span class="pill p-border">Referred</span>':'<span class="small">—</span>');
   return '<tr><td><b>'+w.ref+'</b></td><td>'+esc(w.worker)+'</td><td class="small">'+esc(w.role)+'</td><td class="small">'+esc(w.engagement)+'</td><td>'+pill(w.status)+'</td><td class="small">'+sdsLink+'</td><td class="small">'+inviteCell(w)+'<div class="small" data-fee="'+esc(w.ref)+'"></div></td><td class="small">'+(w.nextReview?fmtDate(w.nextReview):'—')+'</td></tr>';
