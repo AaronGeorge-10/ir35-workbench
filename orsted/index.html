@@ -2884,11 +2884,21 @@ async function commitSDS(){
    released however the save ends, so a failed save can be retried. */
 const WB_CLOSED_DUPLICATE='Closed - duplicate';
 let WB_COMMIT_BUSY=false;
+/* R-42 (Aaron, 29 Sep 2026): the same lock on every button that writes. Checked
+   one by one: Save to role library could mint two permanent ROLE numbers, and
+   Submit my answers / Save changes could run twice. The rest are refused a
+   second time by the database, but the second click then showed a failure just
+   after a success. Payment buttons are excluded - payBusy() already locks them.
+   A guarded function must never call another guarded one (it would be ignored). */
+const WB_GUARDED=['commitAwait','commitBorder','commitSDS','commitRole','commitContractorSubmission',
+ 'saveAmendment','signOff','signOffAndSend','signOffSelected','referAtSignoff','returnForInformation',
+ 'escalate','waiveFee','deleteRole','inviteContractor'];
+const WB_GUARD_RE=new RegExp('(^|[^\\w.])('+WB_GUARDED.join('|')+')\\(');
 function wbSingleFlight(fn){
  return async function(){
   if(WB_COMMIT_BUSY) return;
   WB_COMMIT_BUSY=true;
-  var btns=[].slice.call(document.querySelectorAll('button[onclick="commitAwait()"],button[onclick="commitBorder()"],button[onclick="commitSDS()"]'));
+  var btns=[].slice.call(document.querySelectorAll('button[onclick]')).filter(function(b){ return WB_GUARD_RE.test(b.getAttribute('onclick')||''); });
   btns.forEach(function(b){ b.dataset.wbLabel=b.innerHTML; b.disabled=true; b.style.opacity='.6'; b.style.cursor='wait'; b.innerHTML='Saving\u2026 please wait'; });
   try{ return await fn.apply(this,arguments); }
   finally{
@@ -2897,9 +2907,7 @@ function wbSingleFlight(fn){
   }
  };
 }
-commitAwait=wbSingleFlight(commitAwait);
-commitBorder=wbSingleFlight(commitBorder);
-commitSDS=wbSingleFlight(commitSDS);
+WB_GUARDED.forEach(function(n){ if(typeof window[n]==='function') window[n]=wbSingleFlight(window[n]); });
 
 /* ===== Role library — edit / delete / search / real dates (v0.3-role.1) ===== */
 let EDIT_ROLE_ID=null;
