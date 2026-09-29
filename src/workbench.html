@@ -669,7 +669,9 @@ const DB={
    if(q[i].error && fatalIdx.indexOf(i)>=0) throw q[i].error;
   }
   this.s={
-   workers:(q[0].data||[]).map(workerRowToView),
+   /* R-41 (Aaron, 29 Sep 2026): a record closed as a duplicate stays in the
+      database, with its audit trail, but is kept out of every screen. */
+   workers:(q[0].data||[]).filter(function(r){return r.status!==WB_CLOSED_DUPLICATE;}).map(workerRowToView),
    sds:(q[1].data||[]).map(sdsRowToView),
    reviews:(q[2].error?[]:(q[2].data||[])).map(reviewRowToView),
    audit:(q[3].error?[]:(q[3].data||[])).map(auditRowToView),
@@ -2869,6 +2871,32 @@ async function commitSDS(){
  if(!await wbRefresh('determination')){return;} PREFILL_SOURCE=null; renderNav(); openSDS(out.worker_ref);
 }
 
+
+/* R-41 (Aaron, 29 Sep 2026): one click, one record. On 28 Sep a second click
+   on "Save and await" landed while the first save was still sending the
+   invitation, and created a duplicate worker (AS-100014 of AS-100013). The same
+   gap would let a double click issue two statements through commitSDS().
+   While any of these three saves is running, every one of their buttons is
+   disabled and reads "Saving...", and a further call is ignored. The lock is
+   released however the save ends, so a failed save can be retried. */
+const WB_CLOSED_DUPLICATE='Closed - duplicate';
+let WB_COMMIT_BUSY=false;
+function wbSingleFlight(fn){
+ return async function(){
+  if(WB_COMMIT_BUSY) return;
+  WB_COMMIT_BUSY=true;
+  var btns=[].slice.call(document.querySelectorAll('button[onclick="commitAwait()"],button[onclick="commitBorder()"],button[onclick="commitSDS()"]'));
+  btns.forEach(function(b){ b.dataset.wbLabel=b.innerHTML; b.disabled=true; b.style.opacity='.6'; b.style.cursor='wait'; b.innerHTML='Saving\u2026 please wait'; });
+  try{ return await fn.apply(this,arguments); }
+  finally{
+   WB_COMMIT_BUSY=false;
+   btns.forEach(function(b){ if(b.dataset.wbLabel!=null){ b.innerHTML=b.dataset.wbLabel; delete b.dataset.wbLabel; } b.disabled=false; b.style.opacity=''; b.style.cursor=''; });
+  }
+ };
+}
+commitAwait=wbSingleFlight(commitAwait);
+commitBorder=wbSingleFlight(commitBorder);
+commitSDS=wbSingleFlight(commitSDS);
 
 /* ===== Role library — edit / delete / search / real dates (v0.3-role.1) ===== */
 let EDIT_ROLE_ID=null;
