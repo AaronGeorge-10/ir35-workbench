@@ -37,6 +37,31 @@ b.t{color:var(--navy)}
 .out{background:#E3F0EF;color:var(--teal)}.in{background:#F5E4EF;color:var(--magenta)}.bor{background:var(--amber-bg);color:var(--navy)}
 a{color:var(--teal)}
 footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+/* R-44: drawn pictures of the screen, built from the app's own question layout */
+.fig{margin:14px 0 4px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:14px}
+.figcap{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.fq{display:flex;flex-direction:column;gap:10px;padding:16px;background:#f7fafc;border:1px solid var(--line);border-radius:14px;font-size:13.5px}
+.fq-head{display:flex;gap:11px;align-items:flex-start}
+.fq-badge{flex:0 0 auto;min-width:28px;height:23px;padding:0 7px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:var(--navy);color:#fff;font-size:12px;font-weight:700}
+.fq-t{font-weight:700;line-height:1.45}
+.fq-gw{padding-left:39px;display:flex;flex-direction:column;gap:7px}
+.fq-gt{display:flex;align-items:center;gap:6px;color:#176561;font-weight:700;font-size:12.5px}
+.fq-h{padding:9px 11px;background:#fff;border:1px solid var(--line);border-radius:10px;color:var(--muted);font-size:12.5px;line-height:1.5}
+.fq-o{display:flex;align-items:center;gap:10px;min-height:40px;padding:8px 13px;background:#fff;border:1.5px solid var(--line);border-radius:11px}
+.fq-o .d{width:15px;height:15px;border-radius:50%;border:1.5px solid #9aa8b4;flex:0 0 auto;box-sizing:border-box}
+.fq-o.sel{border-color:var(--teal);background:#E3F0EF;font-weight:700}.fq-o.sel .d{border:5px solid var(--teal)}
+.fq-opts{display:flex;flex-direction:column;gap:6px}
+.fq-lock{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-top:9px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.fq-btn{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#176561;font-weight:600}
+.fq-note{align-self:flex-start;display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border:1.5px dashed var(--line);border-radius:10px;color:var(--muted);font-weight:600;font-size:12.5px}
+.fq-save{padding:14px 16px;border:1px solid var(--line);border-left:4px solid var(--teal);border-radius:12px;background:#fff;font-size:13px}
+.fq-save .h{font-weight:700;font-size:14px;margin-bottom:6px}
+.fq-tick{display:flex;gap:8px;align-items:flex-start;margin:8px 0}
+.fq-tick .bx{width:15px;height:15px;border-radius:3px;background:var(--teal);flex:0 0 auto;margin-top:2px}
+.fq-tick .bx.off{background:#fff;border:1.5px solid #9aa8b4}
+.mk{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#F2B705;color:#231F20;font-size:11.5px;font-weight:800;flex:0 0 auto}
+.figkey{margin:12px 0 0 0;list-style:none;padding:0}
+.figkey li{display:flex;gap:9px;align-items:flex-start;margin-bottom:8px;font-size:14px}
 @media print{
   body{background:#fff;font-size:11.5pt}
   header{background:#0C365F !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -113,8 +138,8 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-si
     <li><b class="t">New Assessment</b> → choose <b class="t">Role — library</b>.</li>
     <li>Optionally paste the job description into <b class="t">JD Analyser</b> first for a quick lean, then take it into a full assessment.</li>
     <li>Enter the role title, sector and typical engagement.</li>
-    <li>Answer each question — most are three-way (points outside / neutral / points inside). Guidance notes appear on several questions to keep answers consistent.</li>
-    <li>Add a short note wherever an answer is "in between" or needs context — this becomes your evidence.</li>
+    <li>Answer each question — most are three-way (points outside / neutral / points inside). Where a question has a <b class="t">Guidance</b> link under it, click it to open a short explanation that keeps answers consistent.</li>
+    <li>Click <b class="t">+ Notes / evidence (optional)</b> under a question to add a short note wherever an answer is "in between" or needs context — this becomes your evidence, and it pre-fills every worker assessed against the role.</li>
     <li><b class="t">Run</b> to see the provisional lean and score, then <b class="t">Save to role library</b>. You can edit a saved role at any time to refine wording or add evidence.</li>
   </ol>
 </div>
@@ -124,13 +149,46 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-si
   <ol>
     <li>Line managers start in the <b class="t">Role Library</b>, which is the first screen they see after signing in. Find the role and click <b class="t">Pre-fill a worker →</b>; New Assessment opens with that role selected.</li>
     <li>In <b class="t">New Assessment</b>, enter the <b class="t">worker / PSC name</b>, the <b class="t">consultant's email address</b>, and <b class="t">select the role from the Role Library</b>. All three are required. A role title is free text and two people will spell the same role two ways — the <b class="t">role reference</b> is what identifies it, and every determination has to name the library role it was made against. If the role is not listed, ask your client administrator to add it to the library first.</li>
-    <li>The library role's answers pre-fill. Review each one against this worker's <b class="t">actual</b> engagement and change anything that differs — where a worker's answers diverge from the role, the divergence is recorded.</li>
+    <li>The library role's answers and notes pre-fill, and the answers are locked. Review each one against this worker's <b class="t">actual</b> engagement. If anything differs, click <b class="t">Adjust for this worker</b> under that question and choose the right answer — where a worker's answers diverge from the role, the divergence is recorded.</li>
     <li>Complete the <b class="t">engagement details</b>: how the consultant is engaged (through YunoJuno, through a recruitment agency — with the agency's name and contact email address — or through Ascend payroll). Workers paid through an umbrella company are that company's PAYE employees, so the off-payroll rules do not apply and they do not need an assessment and the <b class="t">assignment start date</b>. The statement goes to everyone in the payment chain, and the fee-payer applies the tax treatment from the start date, so both are required. If you are signed in as a line manager, you are recorded as the line manager automatically. A client administrator creating an assessment on a line manager's behalf enters that line manager's email address.</li>
+    <li>If you have written notes that the role does not hold yet, a box headed <b class="t">Save your notes to the role library?</b> appears under the result, above the save button. Untick any note that is only about this consultant, then click <b class="t">Save these notes to the role</b>. The next consultant assessed for this role starts with those notes already filled in. Your notes are added to the role &mdash; nothing already there is replaced, and the role&rsquo;s answers do not change. Then save the assessment as usual.</li>
     <li>Click <b class="t">Run determination</b>. The worker is saved to the Worker Register as <b class="t">Awaiting consultant</b> and an invitation is emailed to them automatically. <b class="t">At this point no determination has been made and no statement has been issued.</b></li>
     <li>When the consultant submits their questionnaire, their answers are merged and the determination runs. If it lands <span class="pill out">OUTSIDE</span> or <span class="pill in">INSIDE</span> an SDS is produced. If it lands <span class="pill bor">BORDERLINE</span> it goes to the internal senior reviewer, who can escalate it for advice from an external specialist and then signs it off — no SDS issues until it is signed off.</li>
     <li>Each determination is re-assessed <b class="t">every 12 months</b>, or immediately when the role, rate or working practices materially change.</li>
   </ol>
 </div>
+
+<div class="card"><h3>What a question looks like</h3><div class="fig" style="margin-top:0">
+  <div class="figcap">What a question looks like</div>
+  <div class="fq">
+    <div class="fq-head"><span class="fq-badge">8</span><span class="fq-t">Does the client have the right to direct the consultant regarding their day-to-day working methods?</span></div>
+    <div class="fq-gw"><span class="fq-gt">&#9432; Guidance &#8963; <span class="mk">1</span></span>
+      <div class="fq-h">This is about the way the work is done rather than what is delivered, and does not include having to follow industry standards or regulations.</div></div>
+    <div class="fq-opts">
+      <div class="fq-o sel"><span class="d"></span>No &mdash; consultant decides their own methods <span class="mk">2</span></div>
+      <div class="fq-o"><span class="d"></span>Partly / in some respects</div>
+      <div class="fq-o"><span class="d"></span>Yes &mdash; the client directs the methods</div>
+    </div>
+    <div class="fq-lock"><span>Pre-filled from the role library.</span><span class="fq-btn">Adjust for this worker <span class="mk">3</span></span></div>
+    <span class="fq-note">+ Notes / evidence (optional) <span class="mk">4</span></span>
+  </div>
+  <ol class="figkey">
+    <li><span class="mk">1</span><span><b class="t">Guidance</b> &mdash; click it to open a short explanation of what the question means. Click again to close it.</span></li>
+    <li><span class="mk">2</span><span><b class="t">Your answer</b> &mdash; click the one that fits. The chosen answer turns light green. <b class="t">Green only means &ldquo;selected&rdquo;</b>; it does not mean the answer points inside or outside IR35.</span></li>
+    <li><span class="mk">3</span><span><b class="t">Adjust for this worker</b> &mdash; answers that came from the role library are locked. If this consultant&rsquo;s situation is different, click it, then choose the right answer. The change is recorded against the determination.</span></li>
+    <li><span class="mk">4</span><span><b class="t">+ Notes / evidence (optional)</b> &mdash; click it to open a notes box and write a sentence of evidence: what the contract says, or what actually happens. If a note is already there, the box is open with it showing.</span></li>
+  </ol>
+</div>
+<div class="fig">
+  <div class="figcap">After you click Run &mdash; saving your notes to the role</div>
+  <div class="fq-save">
+    <div class="h">Save your notes to the role library?</div>
+    <div>You have written notes on <b>2 questions</b> that the role does not hold yet&hellip;</div>
+    <div class="fq-tick"><span class="bx"></span><span><b>Does the client have the right to direct&hellip;</b><br>Methods agreed at kick-off; the client reviews outputs only.</span></div>
+    <div class="fq-tick"><span class="bx off"></span><span><b>Which party decides when the work is performed?</b><br>Works from home on Fridays &mdash; specific to this consultant, so left unticked.</span></div>
+    <span class="fq-btn">Save these notes to the role</span>
+  </div>
+</div></div>
 
 <div class="card warn">
   <h3>If an invitation does not arrive</h3>
