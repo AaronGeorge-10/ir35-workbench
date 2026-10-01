@@ -34,6 +34,31 @@ b.t{color:var(--navy)}
 .out{background:#E3F0EF;color:var(--teal)}.in{background:#F5E4EF;color:var(--magenta)}.bor{background:var(--amber-bg);color:var(--navy)}
 a{color:var(--teal)}
 footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+/* R-44: drawn pictures of the screen, built from the app's own question layout */
+.fig{margin:14px 0 4px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:14px}
+.figcap{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.fq{display:flex;flex-direction:column;gap:10px;padding:16px;background:#f7fafc;border:1px solid var(--line);border-radius:14px;font-size:13.5px}
+.fq-head{display:flex;gap:11px;align-items:flex-start}
+.fq-badge{flex:0 0 auto;min-width:28px;height:23px;padding:0 7px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:var(--navy);color:#fff;font-size:12px;font-weight:700}
+.fq-t{font-weight:700;line-height:1.45}
+.fq-gw{padding-left:39px;display:flex;flex-direction:column;gap:7px}
+.fq-gt{display:flex;align-items:center;gap:6px;color:#176561;font-weight:700;font-size:12.5px}
+.fq-h{padding:9px 11px;background:#fff;border:1px solid var(--line);border-radius:10px;color:var(--muted);font-size:12.5px;line-height:1.5}
+.fq-o{display:flex;align-items:center;gap:10px;min-height:40px;padding:8px 13px;background:#fff;border:1.5px solid var(--line);border-radius:11px}
+.fq-o .d{width:15px;height:15px;border-radius:50%;border:1.5px solid #9aa8b4;flex:0 0 auto;box-sizing:border-box}
+.fq-o.sel{border-color:var(--teal);background:#E3F0EF;font-weight:700}.fq-o.sel .d{border:5px solid var(--teal)}
+.fq-opts{display:flex;flex-direction:column;gap:6px}
+.fq-lock{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-top:9px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.fq-btn{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#176561;font-weight:600}
+.fq-note{align-self:flex-start;display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border:1.5px dashed var(--line);border-radius:10px;color:var(--muted);font-weight:600;font-size:12.5px}
+.fq-save{padding:14px 16px;border:1px solid var(--line);border-left:4px solid var(--teal);border-radius:12px;background:#fff;font-size:13px}
+.fq-save .h{font-weight:700;font-size:14px;margin-bottom:6px}
+.fq-tick{display:flex;gap:8px;align-items:flex-start;margin:8px 0}
+.fq-tick .bx{width:15px;height:15px;border-radius:3px;background:var(--teal);flex:0 0 auto;margin-top:2px}
+.fq-tick .bx.off{background:#fff;border:1.5px solid #9aa8b4}
+.mk{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#F2B705;color:#231F20;font-size:11.5px;font-weight:800;flex:0 0 auto}
+.figkey{margin:12px 0 0 0;list-style:none;padding:0}
+.figkey li{display:flex;gap:9px;align-items:flex-start;margin-bottom:8px;font-size:14px}
 @media print{
   body{background:#fff;font-size:11.5pt}
   header{background:#0C365F !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -86,11 +111,44 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-si
     <li>In the <b class="t">Role Library</b>, find the role and click <b class="t">Pre-fill a worker &rarr;</b>. The role must already be in the library &mdash; if it is not there, ask your Client Administrator to add it before you start.</li>
     <li><b class="t">New Assessment</b> opens with that role selected. Enter the {{WORKER_TERM}}&rsquo;s <b class="t">name</b> and <b class="t">email address</b>. The email address is how they are invited, so get it right.</li>
     <li>Answer the <b class="t">first four questions</b> at the top. They are about this particular engagement: whether the contract has <b class="t">already started</b>, whether this {{WORKER_TERM}} has <b class="t">worked for {{TENANT_NAME}} before</b>, whether they hold a <b class="t">statutory office</b> such as a directorship or board seat, and whether they are <b class="t">personally named in the contract</b>. Nobody else can answer these for you.</li>
-    <li>Work down the rest of the questions. They are <b class="t">already filled in from the role library</b>. Read each one against this {{WORKER_TERM}} and <b class="t">change anything that differs</b> &mdash; a divergence from the library is recorded, which is the point.</li>
-    <li>Wherever there is a notes box, <b class="t">add a sentence of evidence</b>: what the contract says, what actually happens on site. This is what demonstrates reasonable care if the determination is ever questioned.</li>
+    <li>Work down the rest of the questions. They are <b class="t">already filled in from the role library</b> and locked. Read each one against this {{WORKER_TERM}}. If anything is different, click <b class="t">Adjust for this worker</b> under that question and choose the right answer &mdash; a divergence from the library is recorded, which is the point.</li>
+    <li>If you are unsure what a question means, click <b class="t">Guidance</b> under it.</li>
+    <li>Click <b class="t">+ Notes / evidence (optional)</b> under a question to <b class="t">add a sentence of evidence</b>: what the contract says, what actually happens on site. This is what demonstrates reasonable care if the determination is ever questioned.</li>
     <li>Complete the <b class="t">engagement details</b>: how the {{WORKER_TERM}} is engaged (direct, through an agency, or through Ascend payroll), the agency&rsquo;s contact email if there is one, and the <b class="t">assignment start date</b>. The statement has to reach everyone in the payment chain, so these are required.</li>
     <li>Click <b class="t">Run determination</b>.</li>
+    <li>If you have written notes that the role does not hold yet, a box headed <b class="t">Save your notes to the role library?</b> appears under the result, above the save button. Untick any note that is only about this {{WORKER_TERM}}, then click <b class="t">Save these notes to the role</b>. The next {{WORKER_TERM}} assessed for this role starts with those notes already filled in. Your notes are added to the role &mdash; nothing already there is replaced, and the role&rsquo;s answers do not change. Then save the assessment as usual.</li>
   </ol>
+<div class="fig">
+  <div class="figcap">What a question looks like</div>
+  <div class="fq">
+    <div class="fq-head"><span class="fq-badge">8</span><span class="fq-t">Does the client have the right to direct the {{WORKER_TERM}} regarding their day-to-day working methods?</span></div>
+    <div class="fq-gw"><span class="fq-gt">&#9432; Guidance &#8963; <span class="mk">1</span></span>
+      <div class="fq-h">This is about the way the work is done rather than what is delivered, and does not include having to follow industry standards or regulations.</div></div>
+    <div class="fq-opts">
+      <div class="fq-o sel"><span class="d"></span>No &mdash; {{WORKER_TERM}} decides their own methods <span class="mk">2</span></div>
+      <div class="fq-o"><span class="d"></span>Partly / in some respects</div>
+      <div class="fq-o"><span class="d"></span>Yes &mdash; the client directs the methods</div>
+    </div>
+    <div class="fq-lock"><span>Pre-filled from the role library.</span><span class="fq-btn">Adjust for this worker <span class="mk">3</span></span></div>
+    <span class="fq-note">+ Notes / evidence (optional) <span class="mk">4</span></span>
+  </div>
+  <ol class="figkey">
+    <li><span class="mk">1</span><span><b class="t">Guidance</b> &mdash; click it to open a short explanation of what the question means. Click again to close it.</span></li>
+    <li><span class="mk">2</span><span><b class="t">Your answer</b> &mdash; click the one that fits. The chosen answer turns light green. <b class="t">Green only means &ldquo;selected&rdquo;</b>; it does not mean the answer points inside or outside IR35.</span></li>
+    <li><span class="mk">3</span><span><b class="t">Adjust for this worker</b> &mdash; answers that came from the role library are locked. If this {{WORKER_TERM}}&rsquo;s situation is different, click it, then choose the right answer. The change is recorded against the determination.</span></li>
+    <li><span class="mk">4</span><span><b class="t">+ Notes / evidence (optional)</b> &mdash; click it to open a notes box and write a sentence of evidence: what the contract says, or what actually happens. If a note is already there, the box is open with it showing.</span></li>
+  </ol>
+</div>
+<div class="fig">
+  <div class="figcap">After you click Run &mdash; saving your notes to the role</div>
+  <div class="fq-save">
+    <div class="h">Save your notes to the role library?</div>
+    <div>You have written notes on <b>2 questions</b> that the role does not hold yet&hellip;</div>
+    <div class="fq-tick"><span class="bx"></span><span><b>Does the client have the right to direct&hellip;</b><br>Methods agreed at kick-off; the client reviews outputs only.</span></div>
+    <div class="fq-tick"><span class="bx off"></span><span><b>Which party decides when the work is performed?</b><br>Works from home on Fridays &mdash; specific to this {{WORKER_TERM}}, so left unticked.</span></div>
+    <span class="fq-btn">Save these notes to the role</span>
+  </div>
+</div>
 </div>
 
 <div class="card">
