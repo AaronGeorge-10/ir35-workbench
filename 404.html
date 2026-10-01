@@ -1,0 +1,18 @@
+<!doctype html><html lang="en-GB"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>IR35 Workbench</title>
+<script>
+/* R-45 (Aaron, 1 Oct 2026): never a 404 because of a capital letter.
+   GitHub Pages addresses are case-sensitive; every Workbench address is lower case
+   (build.py refuses anything else). So when an address with a capital in it misses,
+   send the visitor to the lower-case address, keeping the query string and the
+   #fragment (sign-in links carry them). An address that is already lower case and
+   still missing is a genuine "not found" and is shown below - no redirect, no loop. */
+(function(){
+  var p = location.pathname, l = p.toLowerCase();
+  if (l !== p) { location.replace(l + location.search + location.hash); }
+})();
+</script>
+<style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#001E5A;color:#fff;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;text-align:center;padding:24px}div{max-width:440px}h1{font-size:20px;margin:0 0 8px}p{opacity:.85;font-size:14px;line-height:1.55}a{color:#9fe0dc}</style>
+</head><body><div><h1>IR35 Workbench</h1><p>That page could not be found. Please use the direct link provided by Ascend, for example <a href="/orsted/">ir35workbench.co.uk/orsted/</a>.</p><p>Trouble signing in? Email <a href="mailto:assessments@ir35workbench.co.uk">assessments@ir35workbench.co.uk</a>.</p></div></body></html>
