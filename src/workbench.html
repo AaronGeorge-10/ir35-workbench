@@ -2771,6 +2771,7 @@ function runAssess(){
  if(_out.length){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">&#8505; <b>Awaiting the {{WORKER_TERM}}.</b> Further questions are answered by the {{WORKER_TERM}}, not the hirer. Their answers are recorded against this assessment when the {{WORKER_TERM}} completes their questionnaire.</div>';}
  if(!d.office&&d.strengths.length){h+='<p class="small" style="margin-top:8px"><b>Pointing outside</b></p><ul>'+d.strengths.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
  if(!d.office&&d.risks.length){h+='<p class="small" style="margin-top:8px"><b>Pointing inside</b></p><ul>'+d.risks.slice(0,6).map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';}
+ h+=roleNotesOfferHtml();
  if(CURRENT_USER&&CURRENT_USER.role==='contractor'){h+='<div class="gatebox" style="background:#eef1f5;border-color:#cfd6e0;color:#003182">As the {{WORKER_TERM}} you do not issue your own SDS. Submitting sends your answers to the end-hirer, who makes the determination.</div>'+'<div style="margin-top:12px"><button class="btn" onclick="commitContractorSubmission()">Submit my answers to the end-hirer \u2192</button></div>';}else if(outstandingContractorQs().length){h+='<div class="gatebox">\u23f8 Nothing is issued yet. Some questions can only be answered by the {{WORKER_TERM}}, and no Status Determination Statement can be issued until they have. Saving puts <b>'+esc(lastA?lastA.worker:'this worker')+'</b> on the register as <b>Awaiting {{WORKER_TERM}}</b>; the determination is made once their answers are in. Please click the save and await the {{WORKER_TERM}} button below.</div><div style="margin-top:12px"><button class="btn" onclick="commitAwait()">Save and await the {{WORKER_TERM}} \u2192</button></div>';}else if(d.outcome==='border'){h+='<div class="gatebox">⛔ No SDS issued. This case is gated — it routes to a qualified IR35 reviewer for sign-off before any statement can be released.</div><div style="margin-top:12px"><button class="btn" onclick="commitBorder()">Send to expert-review queue →</button></div>';}
  else{h+='<div style="margin-top:12px"><button class="btn" onclick="commitSDS()">Generate SDS &amp; add to register →</button></div>';}
  h+='</div>';
@@ -2887,9 +2888,87 @@ let WB_COMMIT_BUSY=false;
    second time by the database, but the second click then showed a failure just
    after a success. Payment buttons are excluded - payBusy() already locks them.
    A guarded function must never call another guarded one (it would be ignored). */
+/* ===== R-43 (Aaron, 1 Oct 2026): a line manager's notes go back to the role =====
+   A line manager writes the same notes for every worker on the same role. This
+   offers, under the result and BEFORE the determination is saved, to add the
+   notes they have written to the library role, so the next worker on that role
+   starts with them. Decided by Aaron:
+     - NOTES ONLY. Answers, lean and scores are never sent and never changed.
+     - ADDED, NOT REPLACED. add_role_notes() appends beneath the role's own note.
+   Only the role's own questions are offered (ROLE_RULESET); the worker-only
+   questions never are, and the database refuses them by name anyway. Each note
+   has a tick box, ticked by default, so anything that is about this worker
+   alone can be left off. Once saved, the role's notes match what is on screen,
+   so the offer does not appear again for the same text - in practice it shows
+   for the first worker on a role and then only when something new is written. */
+function roleNotesCanSave(){
+ return !!(CURRENT_USER&&['linemanager','clientadmin','platform'].indexOf(CURRENT_USER.role)>=0);
+}
+function roleNoteCandidates(){
+ if(ASSESS_MODE==='role'||!roleNotesCanSave()) return [];
+ const r=roleByRef(selectedRoleRef()); if(!r) return [];
+ const ev=r.evidence||{}, out=[];
+ ROLE_RULESET.forEach(function(q){
+  const el=document.getElementById('note_'+q.id); if(!el) return;
+  const note=(el.value||'').trim(); if(!note) return;
+  const old=String(ev[q.id]||'').trim();
+  if(note===old) return;
+  /* a pre-filled note the line manager has added to: offer only the addition */
+  const extra=(old&&note.indexOf(old)===0)?note.slice(old.length).trim():note;
+  if(!extra||(old&&old.indexOf(extra)>=0)) return;
+  out.push({id:q.id,label:q.t.replace(/[—].*$/,'').trim(),text:extra});
+ });
+ return out;
+}
+function roleNotesOfferHtml(){
+ const c=roleNoteCandidates(); if(!c.length) return '';
+ const r=roleByRef(selectedRoleRef());
+ const n=c.length, qs=n===1?'question':'questions';
+ return '<div class="card" id="roleNotesOffer" style="margin-top:12px;border-left:4px solid var(--teal)">'
+  +'<h3 style="font-size:15px"><span class="dot"></span>Save your notes to the role library?</h3>'
+  +'<p class="small">You have written notes on <b>'+n+' '+qs+'</b> that the role <b>'+esc(r.roleId)+' — '+esc(r.title)+'</b> does not hold yet. '
+  +'Save them to the role and the next worker assessed for this role starts with these notes already filled in, so they do not have to be written again.</p>'
+  +'<p class="small">Untick any note that is only about this worker. Your notes are <b>added</b> to the role — nothing already on the role is replaced, and the role’s answers are not changed.</p>'
+  +c.map(function(x){
+    const t=x.text.length>240?x.text.slice(0,240)+'…':x.text;
+    return '<label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0;font-size:13px;cursor:pointer">'
+     +'<input type="checkbox" class="rnPick" value="'+esc(x.id)+'" checked style="margin-top:3px">'
+     +'<span><b>'+esc(x.label)+'</b><br><span style="color:#4b5563;white-space:pre-wrap">'+esc(t)+'</span></span></label>';
+  }).join('')
+  +'<div style="margin-top:10px"><button class="btn sec" onclick="saveNotesToRole()">Save these notes to the role</button></div>'
+  +'<p class="small" style="margin-top:8px">This saves the notes to the role only. You still need to save this worker’s assessment below.</p>'
+  +'</div>';
+}
+async function saveNotesToRole(){
+ const box=document.getElementById('roleNotesOffer'); if(!box) return;
+ const ref=selectedRoleRef(), r=roleByRef(ref); if(!r) return;
+ const picked=[].slice.call(box.querySelectorAll('.rnPick:checked')).map(function(b){return b.value;});
+ if(!picked.length){ alert('Tick at least one note to save to the role, or carry on and save the assessment without doing this.'); return; }
+ const notes={};
+ roleNoteCandidates().forEach(function(x){ if(picked.indexOf(x.id)>=0) notes[x.id]=x.text; });
+ if(!Object.keys(notes).length){ alert('Those notes are already on the role. Nothing to add.'); return; }
+ let res;
+ try{
+  res=await window.__sb.rpc('add_role_notes',{p_client_id:WB.CLIENT_ID,p_role_ref:ref,p_notes:notes});
+  if(res.error) throw res.error;
+ }catch(e){
+  /* add_role_notes is one transaction: a failure means nothing was written */
+  alert('Could not save the notes to the role.\n\n'+((e&&e.message)||'The secure store did not accept the change.')+
+        '\n\nNothing was added to the role. Your notes are still on this screen and will be saved with this worker’s assessment as normal.');
+  return;
+ }
+ await loadRoles(true);
+ const added=(res.data&&res.data.added)||[];
+ const k=added.length;
+ box.innerHTML='<h3 style="font-size:15px"><span class="dot"></span>Notes saved to '+esc(r.roleId)+'</h3>'
+  +'<p class="small">'+(k?(k+(k===1?' note was':' notes were')+' added to <b>'+esc(r.title)+'</b>. The next worker assessed for this role will start with '+(k===1?'it':'them')+'.')
+  :'Those notes were already on the role, so nothing new was added.')
+  +' Now save this worker’s assessment below as usual.</p>';
+}
+
 const WB_GUARDED=['commitAwait','commitBorder','commitSDS','commitRole','commitContractorSubmission',
  'saveAmendment','signOff','signOffAndSend','signOffSelected','referAtSignoff','returnForInformation',
- 'escalate','waiveFee','deleteRole','inviteContractor'];
+ 'escalate','waiveFee','deleteRole','inviteContractor','saveNotesToRole'];
 const WB_GUARD_RE=new RegExp('(^|[^\\w.])('+WB_GUARDED.join('|')+')\\(');
 function wbSingleFlight(fn){
  return async function(){
