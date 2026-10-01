@@ -35,6 +35,31 @@ b.t{color:var(--navy)}
 .small{font-size:13.5px;color:var(--muted)}
 a{color:var(--teal)}
 footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+/* R-44: drawn pictures of the screen, built from the app's own question layout */
+.fig{margin:14px 0 4px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:14px}
+.figcap{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.fq{display:flex;flex-direction:column;gap:10px;padding:16px;background:#f7fafc;border:1px solid var(--line);border-radius:14px;font-size:13.5px}
+.fq-head{display:flex;gap:11px;align-items:flex-start}
+.fq-badge{flex:0 0 auto;min-width:28px;height:23px;padding:0 7px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:var(--navy);color:#fff;font-size:12px;font-weight:700}
+.fq-t{font-weight:700;line-height:1.45}
+.fq-gw{padding-left:39px;display:flex;flex-direction:column;gap:7px}
+.fq-gt{display:flex;align-items:center;gap:6px;color:#176561;font-weight:700;font-size:12.5px}
+.fq-h{padding:9px 11px;background:#fff;border:1px solid var(--line);border-radius:10px;color:var(--muted);font-size:12.5px;line-height:1.5}
+.fq-o{display:flex;align-items:center;gap:10px;min-height:40px;padding:8px 13px;background:#fff;border:1.5px solid var(--line);border-radius:11px}
+.fq-o .d{width:15px;height:15px;border-radius:50%;border:1.5px solid #9aa8b4;flex:0 0 auto;box-sizing:border-box}
+.fq-o.sel{border-color:var(--teal);background:#E3F0EF;font-weight:700}.fq-o.sel .d{border:5px solid var(--teal)}
+.fq-opts{display:flex;flex-direction:column;gap:6px}
+.fq-lock{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-top:9px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.fq-btn{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#176561;font-weight:600}
+.fq-note{align-self:flex-start;display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border:1.5px dashed var(--line);border-radius:10px;color:var(--muted);font-weight:600;font-size:12.5px}
+.fq-save{padding:14px 16px;border:1px solid var(--line);border-left:4px solid var(--teal);border-radius:12px;background:#fff;font-size:13px}
+.fq-save .h{font-weight:700;font-size:14px;margin-bottom:6px}
+.fq-tick{display:flex;gap:8px;align-items:flex-start;margin:8px 0}
+.fq-tick .bx{width:15px;height:15px;border-radius:3px;background:var(--teal);flex:0 0 auto;margin-top:2px}
+.fq-tick .bx.off{background:#fff;border:1.5px solid #9aa8b4}
+.mk{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#F2B705;color:#231F20;font-size:11.5px;font-weight:800;flex:0 0 auto}
+.figkey{margin:12px 0 0 0;list-style:none;padding:0}
+.figkey li{display:flex;gap:9px;align-items:flex-start;margin-bottom:8px;font-size:14px}
 @media print{
   body{background:#fff;font-size:11.5pt}
   header{background:#0C365F !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -91,9 +116,29 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-si
     <li>If an <b class="t">assessment fee</b> applies, you are asked to pay it before the questionnaire opens: <b class="t">£75 + VAT (£90.00)</b>, or <b class="t">£65 + VAT (£78.00)</b> if you are logging in to be reassessed for a second or third time. <b class="t">Pay by bank</b> is recommended; card and Revolut Pay are also accepted. Payment is taken securely by Revolut, and the questionnaire opens as soon as it is confirmed. If you want the invoice in your company's name, add your company details before you pay. Your VAT invoice is emailed to you and can be downloaded at any time from <b class="t">My IR35 status</b>.</li>
     <li>Answer each question about this specific engagement and how you <b class="t">actually</b> work.</li>
     <li>Most questions are three-way (for example: yes / it depends / no). Choose the one that best reflects reality.</li>
-    <li>Where a question offers a notes box, add a sentence of context — especially for anything that isn't clear-cut. This is useful evidence.</li>
+    <li>If you are unsure what a question means, click <b class="t">Guidance</b> under it for a short explanation.</li>
+    <li>Click <b class="t">+ Notes / evidence (optional)</b> under a question to add a sentence of context — especially for anything that isn't clear-cut. This is useful evidence.</li>
     <li>Submit when you are done. If something about the assignment changes later, you can go back in and update your answers; they are re-merged and re-audited.</li>
   </ol>
+<div class="fig">
+  <div class="figcap">What a question looks like</div>
+  <div class="fq">
+    <div class="fq-head"><span class="fq-badge">8</span><span class="fq-t">Does the client have the right to direct the consultant regarding their day-to-day working methods?</span></div>
+    <div class="fq-gw"><span class="fq-gt">&#9432; Guidance &#8963; <span class="mk">1</span></span>
+      <div class="fq-h">This is about the way the work is done rather than what is delivered, and does not include having to follow industry standards or regulations.</div></div>
+    <div class="fq-opts">
+      <div class="fq-o sel"><span class="d"></span>No &mdash; consultant decides their own methods <span class="mk">2</span></div>
+      <div class="fq-o"><span class="d"></span>Partly / in some respects</div>
+      <div class="fq-o"><span class="d"></span>Yes &mdash; the client directs the methods</div>
+    </div>
+    <span class="fq-note">+ Notes / evidence (optional) <span class="mk">3</span></span>
+  </div>
+  <ol class="figkey">
+    <li><span class="mk">1</span><span><b class="t">Guidance</b> &mdash; click it to open a short explanation of what the question means. Click again to close it.</span></li>
+    <li><span class="mk">2</span><span><b class="t">Your answer</b> &mdash; click the one that fits. The chosen answer turns light green. <b class="t">Green only means &ldquo;selected&rdquo;</b>; it does not mean the answer points inside or outside IR35.</span></li>
+    <li><span class="mk">3</span><span><b class="t">+ Notes / evidence (optional)</b> &mdash; click it to open a notes box and write a sentence of evidence: what the contract says, or what actually happens. If a note is already there, the box is open with it showing.</span></li>
+  </ol>
+</div>
 </div>
 
 <div class="card">
