@@ -66,31 +66,51 @@ window.WB={CLIENT_ID:'{{CLIENT_ID}}',TENANT_NAME:'{{TENANT_NAME}}',TENANT_SHORT:
   .toolbar input{flex:1;min-width:180px}
   .chip{font-size:12px;color:var(--muted)}
   /* assessment */
-  .q{padding:16px 0;border-bottom:1px solid var(--line)}
+  /* R-44 (Aaron, 1 Oct 2026): calmer questionnaire - cards, folded guidance, one selected colour */
+  #quiz{display:flex;flex-direction:column;gap:14px}
+  .q{display:flex;flex-direction:column;gap:12px;padding:18px 18px 14px;background:#f7fafc;border:1px solid var(--line);border-radius:14px}
   .quiz-client .resp-con{display:none}
-  .q:last-child{border:none}
-  .q .qt{font-weight:600;margin-bottom:4px}
-  .q .qh{color:var(--muted);font-size:12px;margin-bottom:10px}
-  .opts{display:flex;gap:8px;flex-wrap:wrap}
-  .opts label{border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;font-size:13px;transition:.12s}
+  .q .qhead{display:flex;gap:12px;align-items:flex-start}
+  .q .qbadge{flex-shrink:0;min-width:30px;height:24px;padding:0 7px;display:flex;align-items:center;justify-content:center;
+    border-radius:7px;background:var(--navy);color:#fff;font-size:12px;font-weight:700}
+  .q .qt{font-weight:700;font-size:14.5px;line-height:1.45;color:var(--ink)}
+  .q .qgw{display:flex;flex-direction:column;gap:8px;padding-left:42px}
+  .q .qgt{align-self:flex-start;display:flex;align-items:center;gap:6px;padding:2px 0;border:0;background:transparent;
+    cursor:pointer;color:var(--teal-d);font:inherit;font-size:12.5px;font-weight:700}
+  .q .qgt .chev{transition:transform .15s ease}
+  .q .qgt[aria-expanded="true"] .chev{transform:rotate(180deg)}
+  .q .qh{margin:0;padding:10px 12px;background:#fff;border:1px solid var(--line);border-radius:10px;
+    color:var(--muted);font-size:12.5px;line-height:1.55}
+  .q .qh[hidden]{display:none}
+  .opts{display:flex;flex-direction:column;gap:7px}
+  .opts label{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:10px 14px;background:#fff;
+    border:1.5px solid var(--line);border-radius:11px;cursor:pointer;font-size:13.5px;color:var(--ink);transition:.12s}
   .opts input{display:none}
+  .opts label .odot{width:16px;height:16px;border-radius:50%;flex-shrink:0;border:1.5px solid #9aa8b4;background:#fff;box-sizing:border-box}
+  .opts.multi label .odot{border-radius:4px}
   .opts label:hover{border-color:var(--teal)}
-  .opts input:checked + span{font-weight:600}
-  .opts label.sel{border-color:var(--teal);background:var(--green-bg)}
-  .opts label.sel-risk{border-color:var(--red);background:var(--red-bg)}
-  .grphead{font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--teal-d);
-    font-weight:700;margin-top:16px;padding-top:12px;border-top:2px solid var(--line)}
+  .opts input:checked + .odot + span{font-weight:700}
+  .opts label.sel,.opts label.sel-risk{border-color:var(--teal);background:var(--green-bg)}
+  .opts label.sel .odot,.opts label.sel-risk .odot{border:5px solid var(--teal)}
+  .grphead{display:flex;flex-direction:column;gap:2px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
   .grphead:first-child{margin-top:0;padding-top:0;border-top:none}
-  .grphead.minor{color:var(--muted)} .grphead.override{color:var(--red)}
+  .grphead .geb{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--teal-d)}
+  .grphead .gtt{font-size:19px;font-weight:700;color:var(--ink)}
+  .grphead.minor .geb,.grphead.override .geb{color:var(--muted)}
   .q.qlock .opts label{opacity:.62;cursor:not-allowed}
-  .q.qlock{background:#fbfcfd}
-  .qlockbar{margin-top:8px;font-size:11.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .q.qlock{background:#f7fafc}
+  .qlockbar{padding-top:10px;border-top:1px solid var(--line);font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between}
   .qlockbar .lk{color:#6b7280}
-  .qlockbar button{font:inherit;font-size:11.5px;padding:3px 9px;border:1px solid var(--line);
-    border-radius:7px;background:#fff;cursor:pointer;color:var(--teal-d);font-weight:600}
+  .qlockbar button{font:inherit;font-size:12px;padding:4px 10px;border:1px solid var(--line);
+    border-radius:8px;background:#fff;cursor:pointer;color:var(--teal-d);font-weight:600}
   .qlockbar .corr{color:#8a5a00;font-weight:700}
-  .qnote{width:100%;margin-top:9px;min-height:44px;border:1px dashed var(--line);border-radius:8px;
-    padding:8px 10px;font-size:12.5px;font-family:inherit;resize:vertical;background:#fbfbfc;color:var(--ink)}
+  .qaddnote{align-self:flex-start;display:flex;align-items:center;gap:7px;height:38px;padding:0 13px;background:transparent;
+    border:1.5px dashed var(--line);border-radius:10px;font:inherit;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer}
+  .qaddnote:hover{border-color:var(--teal);color:var(--ink)}
+  .qaddnote[hidden]{display:none}
+  .qnote{width:100%;min-height:60px;border:1px solid var(--line);border-radius:10px;
+    padding:9px 11px;font-size:13px;font-family:inherit;resize:vertical;background:#fff;color:var(--ink)}
+  .qnote[hidden]{display:none}
   .qnote:focus{outline:none;border-color:var(--teal);background:#fff}
   .btn{background:var(--teal);color:#fff;border:none;padding:11px 22px;border-radius:9px;font-size:14px;
     font-weight:600;cursor:pointer;transition:.15s}
@@ -863,16 +883,16 @@ function selOpt(inp){
  if(inp.type==='checkbox'){
   const boxes=[...opts.querySelectorAll('input[type=checkbox]')];const last=boxes.length-1;const idx=boxes.indexOf(inp);
   if(inp.checked){ if(idx===last){boxes.forEach((b,i)=>{if(i!==last)b.checked=false;});} else {boxes[last].checked=false;} }
-  boxes.forEach(b=>{const l=b.closest('label');l.classList.remove('sel','sel-risk');if(b.checked)l.classList.add(l.dataset.tone==='risk'?'sel-risk':'sel');});
+  boxes.forEach(b=>{const l=b.closest('label');l.classList.remove('sel','sel-risk');if(b.checked)l.classList.add('sel');});
   updateProg();return;
  }
- opts.querySelectorAll('label').forEach(l=>l.classList.remove('sel','sel-risk'));const lab=inp.closest('label');lab.classList.add(lab.dataset.tone==='risk'?'sel-risk':'sel');updateProg();}
+ opts.querySelectorAll('label').forEach(l=>l.classList.remove('sel','sel-risk'));const lab=inp.closest('label');lab.classList.add('sel');updateProg();}
 function updateProg(){const done=RULESET.filter(q=>document.querySelector('input[name="'+q.id+'"]:checked')).length;const e=document.getElementById('qprog');if(e)e.textContent=done+' / '+RULESET.length+' answered';}
 
 function applyAnswers(ans,ev){RULESET.forEach(q=>{const v=ans[q.id];
- if(q.multi){const arr=Array.isArray(v)?v:[];document.querySelectorAll('input[name="'+q.id+'"]').forEach((b,i)=>{b.checked=arr.includes(i);const l=b.closest('label');l.classList.remove('sel','sel-risk');if(b.checked)l.classList.add(l.dataset.tone==='risk'?'sel-risk':'sel');});}
+ if(q.multi){const arr=Array.isArray(v)?v:[];document.querySelectorAll('input[name="'+q.id+'"]').forEach((b,i)=>{b.checked=arr.includes(i);const l=b.closest('label');l.classList.remove('sel','sel-risk');if(b.checked)l.classList.add('sel');});}
  else{const r=document.querySelector('input[name="'+q.id+'"][value="'+v+'"]');if(r){r.checked=true;selOpt(r);}}
- const nt=document.getElementById('note_'+q.id);if(nt)nt.value=(ev&&ev[q.id])||'';});updateProg();}
+ const nt=document.getElementById('note_'+q.id);if(nt)nt.value=(ev&&ev[q.id])||'';});wbSyncNotes();updateProg();}
 let lastA=null;
 function runAssess(){
  const answers={},evidence={};
@@ -2503,7 +2523,7 @@ let PREFILL_SOURCE=null;
 /* ===== PRE-FILL LOCK (Aaron, 15 Sep 2026) =========================
    A role pre-fill is READ-ONLY by default so a line manager cannot quietly
    drift a worker away from the library role. It is a lock, not a wall: every
-   pre-filled answer carries a "Correct for this worker" control that unlocks
+   pre-filled answer carries an "Adjust for this worker" control that unlocks
    that one answer and RECORDS that it was corrected. That keeps the per-worker
    correction (and so the reasonable-care position) and keeps the divergence
    check meaningful - a locked-shut form could never diverge, which would make
@@ -2538,9 +2558,9 @@ function applyPrefillLock(){
   if(!bar){bar=document.createElement('div');bar.className='qlockbar';
    el.querySelector('.opts').insertAdjacentElement('afterend',bar);}
   bar.innerHTML = locked
-   ? '<span class="lk">Pre-filled from the role library. You can still add notes and evidence.</span>'
-     +'<button type="button" onclick="correctPrefill(\''+q.id+'\')">Correct for this worker</button>'
-   : '<span class="corr">Corrected for this worker</span>'
+   ? '<span class="lk">Pre-filled from the role library.</span>'
+     +'<button type="button" onclick="correctPrefill(\''+q.id+'\')">Adjust for this worker</button>'
+   : '<span class="corr">Adjusted for this worker</span>'
      +'<span class="lk">This change is recorded against the determination.</span>';
  });
 }
@@ -2556,7 +2576,7 @@ function currentRuleset(){return ASSESS_MODE==='role'?ROLE_RULESET:RULESET;}
    Every other question is answered centrally at role-library level by the
    Contingent Workforce Team and arrives pre-filled. */
 function respScopeApply(){var el=document.getElementById('quiz');
- if(el)el.classList.toggle('quiz-client',ASSESS_MODE!=='role'&&RESP!=='contractor');}
+ if(el)el.classList.toggle('quiz-client',ASSESS_MODE!=='role'&&RESP!=='contractor');wbRenumber();}
 function activeQuestions(){var RS=currentRuleset();
  if(ASSESS_MODE==='role'||RESP==='contractor')return RS;
  return RS.filter(function(q){return q.resp!=='contractor';});}
@@ -2686,6 +2706,44 @@ function updateProg(){const RS=activeQuestions();const done=RS.filter(q=>documen
 
 function setAssessMode(m){ASSESS_MODE=m;PREFILL_SOURCE=null;wireAssess();}
 
+/* ===== R-44 questionnaire helpers (Aaron, 1 Oct 2026) =====
+   Plain numbers, never internal codes (C2, K5...) on a client- or consultant-facing screen.
+   The number counts only the questions actually shown, so hiding the consultant-only
+   questions on the client view does not leave gaps. */
+function wbGroupHead(grp,gc){
+ var m=String(grp).split(' — ');
+ return '<div class="grphead '+gc+'">'+(m.length>1?'<span class="geb">'+m[0]+'</span><span class="gtt">'+m.slice(1).join(' — ').replace(/^./,function(c){return c.toUpperCase();})+'</span>':'<span class="gtt">'+grp+'</span>')+'</div>';
+}
+function wbGuide(q){
+ return '<div class="qgw"><button type="button" class="qgt" aria-expanded="false" onclick="wbToggleGuide(this)">'
+  +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>'
+  +'Guidance<svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>'
+  +'<div class="qh" hidden>'+q.h+'</div></div>';
+}
+function wbToggleGuide(b){
+ var open=b.getAttribute('aria-expanded')==='true';
+ b.setAttribute('aria-expanded',String(!open));
+ var g=b.parentNode.querySelector('.qh'); if(g) g.hidden=open;
+}
+function wbOpenNote(id){
+ var t=document.getElementById('note_'+id); if(!t) return;
+ t.hidden=false; var b=t.parentNode.querySelector('.qaddnote'); if(b) b.hidden=true; t.focus();
+}
+function wbSyncNotes(){
+ document.querySelectorAll('#quiz .qnote').forEach(function(t){
+  var has=!!(t.value&&t.value.trim()); var b=t.parentNode.querySelector('.qaddnote');
+  t.hidden=!has; if(b) b.hidden=has;
+ });
+}
+function wbRenumber(){
+ var el=document.getElementById('quiz'); if(!el) return; var n=0;
+ el.querySelectorAll('.q').forEach(function(q){
+  var b=q.querySelector('.qbadge'); if(!b) return;
+  if(q.offsetParent===null&&getComputedStyle(q).display==='none'){ b.textContent=''; return; }
+  b.textContent=String(++n);
+ });
+}
+
 function wireAssess(){
  const roleM=(ASSESS_MODE==='role');
  const card=document.getElementById('quiz').closest('.card');
@@ -2717,11 +2775,11 @@ function wireAssess(){
  /* R-27 (Aaron, 22 Sep): the engagement chain - route, agency, line manager, start date - is a fact about ONE worker, captured on the per-worker assessment. A library role has no worker and never issues a statement, so it is hidden here. Display only: commitRole() never read these fields. */
  ['aChain','aChainHint'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=roleM?'none':'';});
  const c=document.getElementById('quiz');let lastg=null,h='';
- currentRuleset().forEach((q,i)=>{const gc=q.band==='minor'?'minor':q.band==='override'?'override':q.band==='context'?'minor':'';if(q.grp!==lastg){h+='<div class="grphead '+gc+'">'+q.grp+'</div>';lastg=q.grp;}
-  h+='<div class="q'+(q.resp==='contractor'?' resp-con':'')+'" id="q_'+q.id+'"><div class="qt">'+(q.code||(i+1))+'. '+q.t+'</div>'+(q.h?'<div class="qh"><b>Guidance:</b> '+q.h+'</div>':'')+'<div class="opts'+(q.multi?' multi':'')+'">';
+ currentRuleset().forEach((q,i)=>{const gc=q.band==='minor'?'minor':q.band==='override'?'override':q.band==='context'?'minor':'';if(q.grp!==lastg){h+=wbGroupHead(q.grp,gc);lastg=q.grp;}
+  h+='<div class="q'+(q.resp==='contractor'?' resp-con':'')+'" id="q_'+q.id+'"><div class="qhead"><span class="qbadge"></span><div class="qt">'+q.t+'</div></div>'+(q.h?wbGuide(q):'')+'<div class="opts'+(q.multi?' multi':'')+'">';
   const itype=q.multi?'checkbox':'radio';
-  q.opts.forEach((o,oi)=>{h+='<label data-tone="'+o[2]+'"><input type="'+itype+'" name="'+q.id+'" value="'+oi+'" onchange="selOpt(this)"><span>'+o[0]+'</span></label>';});
-  h+='</div><textarea class="qnote" id="note_'+q.id+'" placeholder="Notes / evidence (optional)"></textarea></div>';});
+  q.opts.forEach((o,oi)=>{h+='<label data-tone="'+o[2]+'"><input type="'+itype+'" name="'+q.id+'" value="'+oi+'" onchange="selOpt(this)"><span class="odot"></span><span>'+o[0]+'</span></label>';});
+  h+='</div><button type="button" class="qaddnote" onclick="wbOpenNote(\''+q.id+'\')">+ Notes / evidence (optional)</button><textarea class="qnote" id="note_'+q.id+'" placeholder="Notes / evidence (optional)" hidden></textarea></div>';});
  c.innerHTML=h;respScopeApply();applyPrefillLock();updateProg();
  document.getElementById('assessResult').innerHTML= roleM
   ? '<div class="card"><h3><span class="dot"></span>Provisional lean</h3><p class="small">Answer for the role <b>as typically engaged</b>. A role produces a <b>provisional lean only</b> — never an SDS. Saving it adds the role to the library, where it can pre-fill a per-worker assessment.</p></div>'
