@@ -1,0 +1,249 @@
+/* ============================================================================
+ * Ascend AI Platform — Brand Design Tokens
+ * ============================================================================
+ *
+ * Single-source-of-truth CSS reference for the Ascend brand. Drop this file
+ * into any web project, link it in <head>, and reference the tokens as
+ * `var(--brand-primary)` etc.
+ *
+ * Source: Ascend_Brand_Spec.md (in this folder, 2 May 2026 update)
+ * Also see: Ascend_Bubble_Theme_Setup_Guide.md for Bubble-specific wiring.
+ *
+ * Token naming follows the BEM-ish "kebab-case grouped by purpose" convention:
+ *   --colour-* for raw palette
+ *   --brand-*  for semantic role bindings
+ *   --text-*   for typography
+ *   --font-*   for font stacks
+ *   --space-*  for spacing scale
+ *   --radius-* for border-radius scale
+ *   --shadow-* for elevation
+ *
+ * Last updated: 3 May 2026
+ * ============================================================================ */
+
+:root {
+
+  /* ─────────────────────────────────────────────────────────────────────── */
+  /* RAW PALETTE — primary brand colours                                     */
+  /* ─────────────────────────────────────────────────────────────────────── */
+
+  --colour-magenta:        #9C2373;
+  --colour-teal:           #218380;
+  --colour-navy:           #003182;
+
+  /* Display variants — slightly brighter for use on dark backgrounds where  */
+  /* the deep palette colours look muddy. Used in accent gradient stacks.    */
+  --colour-magenta-bright: #C72E8E;
+  --colour-magenta-deep:   #7A1A5A;
+  --colour-teal-bright:    #2BA8A4;
+  --colour-teal-deep:      #176561;
+  --colour-navy-bright:    #1A4FB8;
+  --colour-navy-deep:      #001E5A;
+
+  /* ─────────────────────────────────────────────────────────────────────── */
+  /* RAW PALETTE — secondary / neutrals                                      */
+  /* ─────────────────────────────────────────────────────────────────────── */
+
+  --colour-near-black:     #231F20;
+  --colour-mid-grey:       #999999;
+  --colour-light-grey:     #DBDBDB;
+  --colour-white:          #FFFFFF;
+
+  /* Off-white / surface variations for layered UI                           */
+  --colour-soft-bg:        #F7F7F8;
+  --colour-page-bg:        #F5F5F6;
+
+  /* ─────────────────────────────────────────────────────────────────────── */
+  /* SEMANTIC ROLE BINDINGS — the set most components will reference         */
+  /* ─────────────────────────────────────────────────────────────────────── */
+
+  --brand-primary:         var(--colour-teal);     /* Buttons, links, primary action */
+  --brand-secondary:       var(--colour-navy);     /* Brand identity, headings */
+  --brand-accent:          var(--colour-magenta);  /* Highlights, key CTAs */
+
+  --text-primary:          var(--colour-near-black);
+  --text-muted:            var(--colour-mid-grey);
+  --text-on-primary:       var(--colour-white);    /* Text colour when on a brand-primary fill */
+
+  --surface:               var(--colour-white);    /* Cards, modals, dropdowns */
+  --surface-subtle:        var(--colour-soft-bg);  /* Page background */
+  --border:                var(--colour-light-grey);
+
+  /* Status / system colours (not brand-specific but consistent palette)     */
+  --status-success:        #2BA86A;
+  --status-warning:        #F4B628;
+  --status-error:          #D7384F;
+  --status-info:           var(--colour-navy-bright);
+
+  /* ─────────────────────────────────────────────────────────────────────── */
+  /* TYPOGRAPHY                                                              */
+  /* ─────────────────────────────────────────────────────────────────────── */
+
+  /* Font stacks. Mulish is the locked Phase-1 substitute for Gilroy
+     (decision 2026-04-20, Ascend_Brand_Spec.md §6 item 2). Comprehensive
+     fallbacks ensure rendering even before the web font has loaded. */
+
+  --font-heading:  'Mulish', 'Gilroy', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-body:     'Mulish', 'Gilroy', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono:     'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+
+  /* Type scale — exactly as Ascend_Style_Guide.pdf §H1–H4 + body */
+  --text-h1:       78px;
+  --text-h2:       58px;
+  --text-h3:       32px;
+  --text-h4:       20px;
+  --text-body:     16px;
+  --text-small:    13px;
+  --text-caption:  11px;
+
+  /* Weights */
+  --weight-regular:    400;
+  --weight-medium:     500;
+  --weight-bold:       700;
+  --weight-extrabold:  800;
+
+  /* Line heights */
+  --line-height-tight:    1.15;
+  --line-height-normal:   1.45;
+  --line-height-relaxed:  1.6;
+
+  /* ─────────────────────────────────────────────────────────────────────── */
+  /* SPACING SCALE  (4px base unit)                                          */
+  /* ─────────────────────────────────────────────────────────────────────── */
+
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   24px;
+  --space-6:   32px;
+  --space-7:   48px;
+  --space-8:   64px;
+  --space-9:   96px;
+
+  /* ─────────────────────────────────────────────────────────────────────── */
+  /* BORDER RADIUS                                                           */
+  /* ─────────────────────────────────────────────────────────────────────── */
+
+  --radius-sm:    4px;
+  --radius-md:    6px;     /* Default button radius */
+  --radius-lg:    12px;    /* Cards, modals */
+  --radius-xl:    20px;    /* Hero panels */
+  --radius-pill:  999px;   /* Status pills, avatars */
+
+  /* ─────────────────────────────────────────────────────────────────────── */
+  /* ELEVATION (box-shadow)                                                  */
+  /* ─────────────────────────────────────────────────────────────────────── */
+
+  --shadow-sm:    0 1px 2px rgba(35, 31, 32, 0.04);
+  --shadow-md:    0 2px 6px rgba(35, 31, 32, 0.08);
+  --shadow-lg:    0 8px 24px rgba(35, 31, 32, 0.12);
+  --shadow-xl:    0 16px 48px rgba(35, 31, 32, 0.16);
+
+  /* ─────────────────────────────────────────────────────────────────────── */
+  /* BRAND GRADIENTS                                                         */
+  /* ─────────────────────────────────────────────────────────────────────── */
+
+  /* Signature 3-colour gradient strip — magenta → teal → navy */
+  --gradient-brand-strip:  linear-gradient(to right, var(--colour-magenta) 0%, var(--colour-teal) 50%, var(--colour-navy) 100%);
+
+  /* Vertical brand gradient for accent rounded squares (background shapes) */
+  --gradient-magenta-stack: linear-gradient(to bottom, var(--colour-magenta-bright), var(--colour-magenta-deep));
+  --gradient-teal-stack:    linear-gradient(to bottom, var(--colour-teal-bright),    var(--colour-teal-deep));
+  --gradient-navy-stack:    linear-gradient(to bottom, var(--colour-navy-bright),    var(--colour-navy-deep));
+
+  /* ─────────────────────────────────────────────────────────────────────── */
+  /* TRANSITIONS                                                             */
+  /* ─────────────────────────────────────────────────────────────────────── */
+
+  --transition-quick:  120ms ease-out;
+  --transition-base:   200ms ease-out;
+  --transition-slow:   320ms ease-out;
+}
+
+
+/* ============================================================================ */
+/* OPTIONAL: Dark mode override                                                  */
+/* ============================================================================ */
+/* Uncomment when dark mode is in scope. The brand palette stays the same; only  */
+/* the surface/text mappings flip.                                               */
+/* ============================================================================ */
+
+/*
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface:           var(--colour-near-black);
+    --surface-subtle:    #1a1517;
+    --text-primary:      var(--colour-white);
+    --text-muted:        #b5b5b5;
+    --border:            #3a3537;
+  }
+}
+*/
+
+
+/* ============================================================================ */
+/* BASE TYPOGRAPHY EXAMPLES                                                      */
+/* ============================================================================ */
+/* These are starter rules — adapt or remove as the consuming project requires.  */
+/* ============================================================================ */
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: var(--line-height-normal);
+  color: var(--text-primary);
+  background: var(--surface-subtle);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-heading);
+  font-weight: var(--weight-extrabold);
+  line-height: var(--line-height-tight);
+  color: var(--brand-secondary);
+  margin: 0 0 var(--space-4);
+}
+
+h1 { font-size: var(--text-h1); }
+h2 { font-size: var(--text-h2); }
+h3 { font-size: var(--text-h3); }
+h4 { font-size: var(--text-h4); }
+
+a {
+  color: var(--brand-primary);
+  text-decoration: none;
+  transition: color var(--transition-quick);
+}
+
+a:hover {
+  color: var(--brand-secondary);
+  text-decoration: underline;
+}
+
+.btn {
+  display: inline-block;
+  padding: var(--space-3) var(--space-5);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--transition-base);
+}
+
+.btn--primary {
+  background: var(--brand-primary);
+  color: var(--text-on-primary);
+}
+
+.btn--secondary {
+  background: transparent;
+  color: var(--brand-primary);
+  border: 2px solid var(--brand-primary);
+}
+
+.btn--accent {
+  background: var(--brand-accent);
+  color: var(--text-on-primary);
+}
