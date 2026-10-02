@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="baseGrad" cx="360.0" cy="126.0" r="1440.0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.55" stop-color="#f5f5f6"/>
+      <stop offset="1" stop-color="#e6e6e8"/>
+    </radialGradient>
+    <pattern id="tilePattern" x="0" y="0" width="140" height="140" patternUnits="userSpaceOnUse">
+      <g transform="translate(70 70) rotate(45)">
+        <rect x="-42" y="-42" width="84" height="84" rx="10" ry="10" fill="#003182" fill-opacity="0.045"/>
+      </g>
+    </pattern>
+    <pattern id="tilePatternAlt" x="70" y="70" width="140" height="140" patternUnits="userSpaceOnUse">
+      <g transform="translate(70 70) rotate(45)">
+        <rect x="-35" y="-35" width="70" height="70" rx="9" ry="9" fill="#003182" fill-opacity="0.025"/>
+      </g>
+    </pattern>
+    <radialGradient id="centerHush" cx="600.0" cy="315.0" r="600.0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="0.7" stop-color="#ffffff" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gradMagenta" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C72E8E"/>
+      <stop offset="1" stop-color="#7A1A5A"/>
+    </linearGradient>
+    <linearGradient id="gradTeal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2BA8A4"/>
+      <stop offset="1" stop-color="#176561"/>
+    </linearGradient>
+    <linearGradient id="gradNavy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1A4FB8"/>
+      <stop offset="1" stop-color="#001E5A"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#baseGrad)"/>
+  <rect width="1200" height="630" fill="url(#tilePattern)"/>
+  <rect width="1200" height="630" fill="url(#tilePatternAlt)"/>
+  <rect width="1200" height="630" fill="url(#centerHush)"/>
+
+  <g opacity="0.55" stroke="#218380" stroke-width="2" fill="none" stroke-linecap="round">
+    <line x1="780" y1="290" x2="1300" y2="-230"/>
+    <line x1="808" y1="318" x2="1328" y2="-202"/>
+    <line x1="836" y1="346" x2="1356" y2="-174"/>
+  </g>
+
+  <g opacity="0.95">
+    <g transform="translate(1010 40) rotate(45)"><rect x="-80" y="-80" width="160" height="160" rx="0" ry="0" fill="url(#gradNavy)"/></g>
+<g transform="translate(1080 100) rotate(45)"><rect x="-80" y="-80" width="160" height="160" rx="0" ry="0" fill="url(#gradTeal)"/></g>
+<g transform="translate(1150 160) rotate(45)"><rect x="-80" y="-80" width="160" height="160" rx="0" ry="0" fill="url(#gradMagenta)"/></g>
+  </g>
+
+  <g opacity="0.92">
+    <g transform="translate(120 590) rotate(45)"><rect x="-50" y="-50" width="100" height="100" rx="0" ry="0" fill="url(#gradNavy)"/></g>
+<g transform="translate(70 640) rotate(45)"><rect x="-50" y="-50" width="100" height="100" rx="0" ry="0" fill="url(#gradTeal)"/></g>
+<g transform="translate(20 690) rotate(45)"><rect x="-50" y="-50" width="100" height="100" rx="0" ry="0" fill="url(#gradMagenta)"/></g>
+  </g>
+
+  <rect x="200" y="60" width="10" height="10" fill="#9C2373"/>
+</svg>
