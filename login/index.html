@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Client login | IR35 Workbench</title>
+<meta name="description" content="Sign in to your organisation's IR35 Workbench.">
+<link rel="canonical" href="https://ir35workbench.co.uk/login/">
+<meta name="robots" content="index, follow">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ir35workbench.co.uk/login/">
+<meta property="og:title" content="Client login | IR35 Workbench">
+<meta property="og:description" content="Sign in to your organisation's IR35 Workbench.">
+<link rel="icon" href="/site-assets/img/Ascend_Favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/site-assets/img/Ascend_Favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/site-assets/img/Ascend_Favicon_32px.png">
+<link rel="apple-touch-icon" sizes="192x192" href="/site-assets/img/Ascend_Favicon_192px.png">
+<link rel="stylesheet" href="/site-assets/ascend-brand-tokens.css">
+<link rel="stylesheet" href="/site-assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+ <div class="wrap">
+  <a class="brand" href="/" aria-label="IR35 Workbench home">
+   <span class="prod">IR35 Workbench</span>
+   <span class="by">by <img src="/site-assets/img/Ascend_Logo_Dark_Transparent_400.png" alt="Ascend People Solutions" width="58" height="24"></span>
+  </a>
+  <button class="navtoggle" aria-expanded="false" aria-controls="menu" onclick="var m=document.getElementById('menu');var o=m.classList.toggle('open');this.setAttribute('aria-expanded',o)">Menu</button>
+  <nav class="menu" id="menu" aria-label="Main"><a href="/">Home</a><a href="/how-it-works/">How it works</a><a href="/features/">Features</a><a href="/security/">Security &amp; data</a><a href="/contact/">Contact</a><a class="btn btn-primary" href="/login/" aria-current=page>Client login</a></nav>
+ </div>
+</header>
+<main id="main">
+<div class="hero" style="min-height:calc(100vh - 160px)"><div class="wrap">
+ <div class="panel">
+  <p class="eyebrow">Client login</p>
+  <h2 style="font-size:28px;margin-bottom:10px">Sign in to the IR35 Workbench</h2>
+  <p class="muted" style="font-size:15px">Enter your work email address and we'll take you to your organisation's sign-in.</p>
+  <form id="loginForm" novalidate>
+   <label for="email">Work email address</label>
+   <input id="email" type="email" autocomplete="email" placeholder="name@yourorganisation.com" required>
+   <button class="btn btn-primary" type="submit">Continue</button>
+  </form>
+  <div class="msg" id="loginMsg" role="status" aria-live="polite"></div>
+  <p class="muted" style="font-size:14px;margin:18px 0 0">Contractors: please use the link in your invitation email.</p>
+ </div>
+</div></div>
+</main>
+<footer>
+ <div class="wrap">
+  <div class="left"><img src="/site-assets/img/Ascend_Logo_Dark_Transparent_400.png" alt="Ascend People Solutions" width="90" height="37">
+  <span>The IR35 Workbench is provided by Ascend People Solutions Ltd.</span></div>
+  <nav aria-label="Footer"><a href="/contact/">Contact</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></nav>
+ </div>
+</footer>
+<script src="/site-assets/login.js"></script>
+</body>
+</html>
